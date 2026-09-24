@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Working guide (AGENTS.md)
+    url: https://github.com/bardic-inspiration/ca-form-filler/blob/main/AGENTS.md
+    about: How work is scoped, committed, and reviewed in this repo.
