@@ -8,59 +8,27 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  # Skips checks on a Markdown-only diff (AGENTS.md §4), and passes with nothing
-  # to check until the project adds a package.json. The job always reports.
+  # Zero-dependency checks (AGENTS.md §5): nothing to install, runs on every
+  # change, docs included, because the lint also checks DEVELOPER.md.
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect what to run
-        id: detect
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.event.pull_request.base.sha }}"
-            HEAD="${{ github.event.pull_request.head.sha }}"
-          else
-            BASE="${{ github.event.before }}"
-            HEAD="${{ github.event.after }}"
-          fi
-
-          DOCS_ONLY=false
-          if [ -n "$BASE" ] && [ "$BASE" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            CHANGED="$(git diff --name-only "$BASE" "$HEAD")"
-            echo "$CHANGED"
-            if [ -n "$CHANGED" ] && ! echo "$CHANGED" | grep -qvE '\.md$'; then
-              DOCS_ONLY=true
-              echo "Markdown-only diff — skipping checks."
-            fi
-          fi
-
-          if [ "$DOCS_ONLY" = false ] && [ -f package.json ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            [ -f package.json ] || echo "No package.json yet — nothing to check."
-          fi
 
       - uses: actions/setup-node@v4
-        if: steps.detect.outputs.run == 'true'
         with:
           node-version: "22"
-          cache: npm
-
-      - name: Install
-        if: steps.detect.outputs.run == 'true'
-        run: npm ci
 
       - name: Lint
-        if: steps.detect.outputs.run == 'true'
-        run: npm run lint --if-present
+        run: node tools/lint.mjs
 
-      - name: Test
-        if: steps.detect.outputs.run == 'true'
-        run: npm test --if-present
+      - name: Test (core logic + headless Chrome smoke test)
+        run: node --test
+        env:
+          CHROME_PATH: google-chrome
