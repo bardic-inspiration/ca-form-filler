@@ -875,11 +875,27 @@ body.is-sorting { cursor: grabbing; user-select: none; }
 .row-hidden { display: none; }
 
 /* ==== SECTION: css — photos ==== */
-.photo-cell { display: flex; flex-direction: column; gap: 5px; padding: 5px; min-height: 100%; outline: none; }
+.photo-cell {
+  display: flex; flex-direction: column; gap: 5px; padding: 5px; min-height: 100%; outline: none;
+  container-type: inline-size;
+}
 .photo-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .photo-cell.drag-over { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
-.photo { position: relative; margin: 0; line-height: 0; }
-.photo img { display: block; width: 100%; height: auto; background: #eef0f3; min-height: 40px; }
+/* Flow layout. --w: the photo's width in % of the cell. --cap-h: its max
+   height (screen: the print cap scaled by --cap-ratio, the cap over the print
+   cell width). --ar: the image's aspect ratio, set on load, so a capped photo
+   narrows instead of leaving a gap. */
+.photo-flow, .pr-flow { --gap: 5px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--gap); }
+.photo-flow.align-center, .pr-flow.align-center { justify-content: center; }
+.photo, .pr-fig {
+  width: min(calc(var(--w, 100) * 1% - var(--gap) * (1 - var(--w, 100) / 100)), calc(var(--cap-h) * var(--ar, 1000)));
+}
+.photo { --cap-h: calc(var(--cap-ratio, 100) * 100cqw); position: relative; margin: 0; line-height: 0; }
+.photo img {
+  display: block; width: 100%; height: auto; min-height: 40px;
+  max-height: var(--cap-h); object-fit: contain; object-position: left top;
+}
+.photo-flow.align-center img, .pr-flow.align-center img { object-position: center top; }
 .photo.dragging { opacity: 0.4; }
 .photo-edit, .photo-remove {
   position: absolute; display: inline-flex; align-items: center; justify-content: center;
@@ -1073,7 +1089,7 @@ body.drop-file::after {
 .pr-general ol { margin: 0; padding-left: 36pt; }
 .pr-general li { margin: 0 0 3pt; padding-left: 4pt; }
 .pr-general li p { margin: 0; white-space: pre-wrap; }
-.pr-general img { display: block; max-width: 100%; max-height: 4.2in; margin: 8pt auto 4pt; }
+.pr-general .pr-flow { margin: 8pt 0 4pt; }
 .pr-table { break-before: page; margin-left: 5pt; width: calc(100% - 6pt); border-collapse: collapse; table-layout: fixed; font-size: 9pt; }
 .pr-table th, .pr-table td { border: 1pt solid #000; padding: 3pt 4pt 4pt; vertical-align: top; text-align: left; }
 .pr-table th { font-size: 10pt; line-height: 1.1; padding-bottom: 8pt; }
@@ -1082,7 +1098,8 @@ body.drop-file::after {
 .pr-table td { white-space: pre-wrap; }
 .pr-table td.pr-item { font-size: 10pt; white-space: normal; }
 .pr-table td.pr-photo { padding: 5px; white-space: normal; }
-.pr-photo img { display: block; width: 100%; height: auto; } .pr-photo img + img { margin-top: 5px; }
+.pr-fig { --cap-h: var(--cap); line-height: 0; break-inside: avoid; }
+.pr-fig img { display: block; width: 100%; height: auto; max-height: var(--cap-h); object-fit: contain; object-position: left top; }
 .pr-pills { display: flex; flex-direction: column; align-items: flex-start; gap: 2pt; margin-top: 3pt; }
 .pr-pill { display: inline-block; padding: 0.5pt 4pt; border-radius: 6pt; font-size: 6.5pt; line-height: 1.3; background: #eee; white-space: nowrap; }
 .pr-pill.complete { background: var(--pill-complete-bg); color: var(--pill-complete-ink); }
@@ -2156,7 +2173,7 @@ function initColumnResize(table) {
       const up = () => {
         grip.removeEventListener('pointermove', move);
         grip.classList.remove('active');
-        if (widths !== start) { state.report.ui.columnWidths = widths; markDirty(); }
+        if (widths !== start) { state.report.ui.columnWidths = widths; markDirty(); updatePhotoCaps(); }
       };
       grip.addEventListener('pointermove', move);
       grip.addEventListener('pointerup', up, { once: true });
@@ -2165,6 +2182,7 @@ function initColumnResize(table) {
       state.report.ui.columnWidths = DEFAULT_COLUMN_WIDTHS.slice();
       apply(state.report.ui.columnWidths);
       markDirty();
+      updatePhotoCaps();
     });
   });
 }
@@ -2228,14 +2246,36 @@ async function addPhotosTo(target, files, beforeId = null) {
   }
 }
 
+function photoCellDisplay(target) {
+  const [kind, id] = target.split(':');
+  const r = state.report;
+  const item = kind === 'gen' ? r.generalObservations.find((g) => g.id === id) : findObservation(id);
+  return item ? item.display : {};
+}
+
+// Screen max height as a multiple of the cell width: the print cap over the print cell width.
+function photoCapRatio(kind) {
+  const r = state.report;
+  return photoMaxHeightIn(r.config, kind) / printPhotoCellWidthIn(r, kind);
+}
+
+function updatePhotoCaps() {
+  for (const cell of $$('.photo-cell[data-target]')) {
+    cell.style.setProperty('--cap-ratio', photoCapRatio(cell.dataset.target.split(':')[0]));
+  }
+}
+
 function photoCell(target, ids, { readOnly = false, compact = false } = {}) {
+  const kind = target.split(':')[0];
+  const layout = photoLayout(state.report, kind, photoCellDisplay(target), ids);
   const cell = h('div', {
     class: 'photo-cell' + (compact ? ' compact' : ''), dataset: { target },
     tabindex: readOnly ? null : '0', 'aria-label': readOnly ? null : 'Photos. Drop, paste or click to add.',
   });
-  for (const id of ids) {
-    const photo = state.report.photos[id];
-    if (photo) cell.append(photoFigure(photo, readOnly));
+  cell.style.setProperty('--cap-ratio', photoCapRatio(kind));
+  if (layout.photos.length) {
+    cell.append(h('div', { class: 'photo-flow' + (layout.align === 'center' ? ' align-center' : '') },
+      layout.photos.map(({ id, width }) => photoFigure(state.report.photos[id], readOnly, width))));
   }
   if (!readOnly) {
     cell.append(ids.length
@@ -2245,16 +2285,25 @@ function photoCell(target, ids, { readOnly = false, compact = false } = {}) {
   return cell;
 }
 
-function photoFigure(photo, readOnly) {
+function photoFigure(photo, readOnly, width = 100) {
   const img = h('img', { alt: photo.caption || photo.fileName || 'Photo', draggable: false });
   setPhotoImage(img, photo);
   const fig = h('figure', { class: 'photo', dataset: { photoId: photo.id }, draggable: !readOnly }, img);
+  fig.style.setProperty('--w', width);
+  trackAspect(img, fig);
   if (!readOnly) {
     fig.append(
       h('button', { type: 'button', class: 'photo-edit', title: 'Edit photo', 'aria-label': 'Edit photo', dataset: { edit: photo.id } }, icon('pencil')),
       h('button', { type: 'button', class: 'photo-remove', title: 'Remove photo', 'aria-label': 'Remove photo', dataset: { remove: photo.id } }, icon('close')));
   }
   return fig;
+}
+
+// Keep --ar (width / height) on fig in step with the image, for the height cap.
+function trackAspect(img, fig) {
+  img.addEventListener('load', () => {
+    if (img.naturalHeight) fig.style.setProperty('--ar', img.naturalWidth / img.naturalHeight);
+  });
 }
 
 function setPhotoImage(img, photo) {
@@ -3397,6 +3446,22 @@ function printPill(text, cls, bg) {
   return h('span', { class: 'pr-pill ' + (cls || ''), style: bg ? { background: bg } : null }, text);
 }
 
+function printPhotoFlow(kind, display, ids, urlFor) {
+  const layout = photoLayout(state.report, kind, display, ids);
+  if (!layout.photos.length) return null;
+  const flow = h('div', { class: 'pr-flow' + (layout.align === 'center' ? ' align-center' : '') },
+    layout.photos.map(({ id, width }) => {
+      const img = h('img', { alt: '' });
+      const fig = h('span', { class: 'pr-fig' }, img);
+      fig.style.setProperty('--w', width);
+      trackAspect(img, fig);
+      img.src = urlFor(id);
+      return fig;
+    }));
+  flow.style.setProperty('--cap', layout.maxHeightIn + 'in');
+  return flow;
+}
+
 function printItemPills(item, { status = true } = {}) {
   const r = state.report;
   const pills = [];
@@ -3438,7 +3503,7 @@ function renderPrint(urlFor) {
         h('h2', null, 'General Observations/Comments'),
         r.generalObservations.length ? h('ol', null, r.generalObservations.map((g) => h('li', null,
           h('p', null, g.text),
-          g.images.filter((id) => r.photos[id]).map((id) => h('img', { src: urlFor(id), alt: '' })))))
+          printPhotoFlow('gen', g.display, g.images, urlFor))))
           : null)),
     r.observations.length ? h('table', { class: 'pr-table' },
       h('colgroup', null, printColumnWidths(r).map((w) => h('col', { style: { width: w + '%' } }))),
@@ -3446,7 +3511,7 @@ function renderPrint(urlFor) {
       h('tbody', null, r.observations.map((o) => h('tr', null,
         h('td', { class: 'pr-item' }, o.number, printItemPills(o)),
         h('td', null, o.description),
-        h('td', { class: 'pr-photo' }, o.photoIds.filter((id) => r.photos[id]).map((id) => h('img', { src: urlFor(id), alt: '' }))),
+        h('td', { class: 'pr-photo' }, printPhotoFlow('obs', o.display, o.photoIds, urlFor)),
         h('td', null, o.requirement))))) : null,
     remindersVisible() && c.pdfShowReminders ? h('section', { class: 'pr-reminders' },
       h('h2', null, 'Open Items from Previous Reports'),
@@ -3667,6 +3732,7 @@ function renderConfigPanel() {
   const panel = $('#config-panel');
   const section = (title, ...kids) => h('div', { class: 'config-section' }, h('h3', null, title), kids);
   const pct = (v) => Math.round(v * 100) + '%';
+  const inches = (v) => Number(v).toFixed(1) + ' in';
   panel.replaceChildren(
     h('div', { class: 'config-head' },
       h('h2', null, 'Settings'),
@@ -3681,7 +3747,9 @@ function renderConfigPanel() {
       configToggle('Show scope tags', 'pdfShowTags'),
       configToggle('Show Reminders section', 'pdfShowReminders'),
       configRange('Photo export size (longest side)', 'photoExportMaxSide', { min: 400, max: 1200, step: 50, format: (v) => v + ' px' }),
-      configRange('Photo export JPEG quality', 'photoExportQuality', { min: 0.5, max: 0.95, step: 0.05, format: pct })),
+      configRange('Photo export JPEG quality', 'photoExportQuality', { min: 0.5, max: 0.95, step: 0.05, format: pct }),
+      configRange('Table photo max height', 'photoMaxHeightTable', { min: 1, max: 6, step: 0.1, format: inches }),
+      configRange('General Observations image max height', 'photoMaxHeightGeneral', { min: 1, max: 6, step: 0.1, format: inches })),
     section('Markup',
       h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Default markup color'),
         h('div', { class: 'swatches' }, MARKUP_COLORS.map((m) => h('button', {
@@ -3800,6 +3868,7 @@ function bindGlobalEvents() {
     if (key === 'carryForward' || key === '*') { renderObservations(); renderReminders(); }
     if (key === 'disclaimer' || key === '*') renderHeader();
     if (key === 'autosaveSeconds' || key === '*') restartAutosaveTimer();
+    if (/^(photoMaxHeight|pdfUseScreenWidths$)/.test(key) || key === '*') updatePhotoCaps();
   });
 }
 

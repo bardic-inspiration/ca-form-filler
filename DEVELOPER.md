@@ -24,32 +24,32 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 | css — header form | 775–806 |
 | css — general observations | 807–819 |
 | css — observation table | 820–876 |
-| css — photos | 877–902 |
-| css — reminders | 903–910 |
-| css — popovers, dialogs, panel | 911–974 |
-| css — photo editor | 975–1007 |
-| css — responsive | 1008–1037 |
-| css — print | 1038–1098 |
-| markup — shell | 1099–1137 |
-| app — dom helpers and icons | 1138–1288 |
-| app — state and events | 1289–1379 |
-| app — dialogs and popovers | 1380–1458 |
-| app — notify: messages and debug log | 1459–1531 |
-| app — render: toolbar and header | 1532–1725 |
-| app — render: general observations | 1726–1781 |
-| app — render: observations table | 1782–1990 |
-| app — render: filters and reminders | 1991–2082 |
-| app — sorting and column resize | 2083–2171 |
-| app — photos: import, cells, drag and drop | 2172–2377 |
-| app — photos: flatten and markup drawing | 2378–2565 |
-| app — photo editor | 2566–3105 |
-| app — persistence: files | 3106–3256 |
-| app — persistence: autosave (IndexedDB) | 3257–3345 |
-| app — export: CSV | 3346–3353 |
-| app — export: PDF (print) | 3354–3537 |
-| app — config panel | 3538–3722 |
-| app — office defaults (developer stub) | 3723–3737 |
-| app — keyboard, window events and init | 3738–3830 |
+| css — photos | 877–918 |
+| css — reminders | 919–926 |
+| css — popovers, dialogs, panel | 927–990 |
+| css — photo editor | 991–1023 |
+| css — responsive | 1024–1053 |
+| css — print | 1054–1115 |
+| markup — shell | 1116–1154 |
+| app — dom helpers and icons | 1155–1305 |
+| app — state and events | 1306–1396 |
+| app — dialogs and popovers | 1397–1475 |
+| app — notify: messages and debug log | 1476–1548 |
+| app — render: toolbar and header | 1549–1742 |
+| app — render: general observations | 1743–1798 |
+| app — render: observations table | 1799–2007 |
+| app — render: filters and reminders | 2008–2099 |
+| app — sorting and column resize | 2100–2189 |
+| app — photos: import, cells, drag and drop | 2190–2426 |
+| app — photos: flatten and markup drawing | 2427–2614 |
+| app — photo editor | 2615–3154 |
+| app — persistence: files | 3155–3305 |
+| app — persistence: autosave (IndexedDB) | 3306–3394 |
+| app — export: CSV | 3395–3402 |
+| app — export: PDF (print) | 3403–3602 |
+| app — config panel | 3603–3790 |
+| app — office defaults (developer stub) | 3791–3805 |
+| app — keyboard, window events and init | 3806–3899 |
 
 ## 2. Modules
 
@@ -273,8 +273,12 @@ a photo cell target (`obs:<id>`, `gen:<id>`).
 | `importImageFile(file) → Promise<Photo>` | Downscale to 1600 px JPEG 0.85, add to `report.photos`. |
 | `photoList(target) → string[]` | Photo id array for `obs:<id>` or `gen:<id>`. |
 | `addPhotosTo(target, files, beforeId)` | Import image files into a cell. |
-| `photoCell(target, ids, { readOnly, compact }) → Element` | Photo stack with empty state. |
-| `photoFigure(photo, readOnly) → Element` | One photo with edit/remove buttons. |
+| `photoCellDisplay(target) → object` | The cell's `display` (observation or general observation). |
+| `photoCapRatio(kind) → number` | Screen max height as a multiple of the cell width: `photoMaxHeightIn()` ÷ `printPhotoCellWidthIn()`. |
+| `updatePhotoCaps()` | Refresh `--cap-ratio` on every photo cell (after cap, column width or template changes). |
+| `photoCell(target, ids, { readOnly, compact }) → Element` | Photo flow (`photoLayout()`: widths, alignment, cap) with add button or empty state. |
+| `photoFigure(photo, readOnly, width = 100) → Element` | One photo (`--w` = width %) with edit/remove buttons. |
+| `trackAspect(img, fig)` | Set `--ar` (width ÷ height) on `fig` whenever `img` loads, so capped photos narrow. |
 | `setPhotoImage(img, photo)` | Show original, then the flattened preview. |
 | `refreshPhotoCell(target)` | Re-render one photo cell. |
 | `dropBeforeId(cell, clientY) → string\|null` | Photo to insert before at a drop point. |
@@ -374,6 +378,7 @@ a photo cell target (`obs:<id>`, `gen:<id>`).
 | `cssString(text) → string` | Quote text for CSS `content`. |
 | `updatePageStyle()` | Write `@page` rules (running header, page 1 footer) into `#print-page-style`. |
 | `printPhotoIds() → string[]` | Photos that appear in the PDF. |
+| `printPhotoFlow(kind, display, ids, urlFor) → Element\|null` | Print photo flow from `photoLayout()` (`--w`, `--cap` in inches, alignment). |
 | `printPill(text, cls, bg) → Element` | Print pill. |
 | `printItemPills(item, { status }) → Element\|null` | Status/tag pills per Config toggles. |
 | `renderPrint(urlFor)` | Build `#print-root` from the report. |
@@ -466,8 +471,8 @@ App-only `state`: `fileHandle`, `fileName`, `dirty`, `changeCount`,
 | `pdfShowReminders` | boolean | `true` | `renderPrint()` |
 | `photoExportMaxSide` | number (400–1200) | `600` | `preparePrint()`, `bindPrintEvents()` |
 | `photoExportQuality` | number | `0.8` | `preparePrint()` |
-| `photoMaxHeightTable` | number (1–6 in) | `2` | `photoMaxHeightIn()` |
-| `photoMaxHeightGeneral` | number (1–6 in) | `4` | `photoMaxHeightIn()` |
+| `photoMaxHeightTable` | number (1–6 in) | `2` | `photoMaxHeightIn()` → `photoCell()`, `printPhotoFlow()` |
+| `photoMaxHeightGeneral` | number (1–6 in) | `4` | `photoMaxHeightIn()` → `photoCell()`, `printPhotoFlow()` |
 | `markupColor` | hex | `#F26A21` | `openPhotoEditor()` |
 | `disclaimer` | string | template text | `createReport()`, `renderDisclaimer()` |
 | `logo` | data URL \| null | `null` (= `DEFAULT_LOGO`) | `renderPrint()`, `logoEditor()` |
@@ -523,12 +528,12 @@ Dispatched on `document` by `emit()`; `detail` is the payload.
 | css — header form | `.header-grid`, `.field`, `.chips`, `.chip`, `.disclaimer` |
 | css — general observations | `.gen-list`, `.gen-item`, `.autogrow` |
 | css — observation table | `.obs-table`, `.col-resizer`, `.cell-text`, `.item-cell`, `.pill*`, `.drag-handle`, `.hover-control`, `.drop-indicator` |
-| css — photos | `.photo-cell`, `.photo`, `.photo-edit`, `.photo-remove`, `.photo-empty` |
+| css — photos | `.photo-cell` (container for `cqw`), `.photo-flow` / `.pr-flow` (`.align-center`), `.photo` / `.pr-fig` (vars `--w`, `--cap-h`, `--ar`), `.photo-edit`, `.photo-remove`, `.photo-empty` |
 | css — reminders | `.rem-group`, `.rem-table` |
 | css — popovers, dialogs, panel | `.popover`, `.menu-item`, `.swatch`, `.dlg`, `.config-panel`, `.toast`, `.busy` |
 | css — photo editor | `.pe`, `.pe-bar`, `.pe-btn`, `.pe-stage`, `.pe-text-input` |
 | css — responsive | `< 900px`: cards, icon toolbar, 44 px targets |
-| css — print | `#print-root`, `.pr`, `.pr-masthead`, `.pr-title`, `.pr-head`, `.pr-general`, `.pr-table`, `.pr-reminders` |
+| css — print | `#print-root`, `.pr`, `.pr-masthead`, `.pr-title`, `.pr-head`, `.pr-general`, `.pr-table`, `.pr-reminders`; photo flow rules live in css — photos |
 
 `@page` rules are generated at runtime into `<style id="print-page-style">`
 by `updatePageStyle()`: Letter, margins 1.55in 1in 0.8in 1in; `@top-left`
