@@ -19,7 +19,8 @@ Closes #
 
 <!--
 UI changes: 1–4 screenshots of what changed (phone width too, if the layout
-differs). Delete this section if nothing users see changed. See AGENTS.md §3.
+differs), committed to dev/screenshots/pr-<N>/ and linked by commit SHA.
+Delete this section if nothing users see changed. See AGENTS.md §3.
 -->
 
 ## Checklist — code changes
