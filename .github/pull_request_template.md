@@ -19,6 +19,7 @@ Closes #
 
 - [ ] Tests written first and passing
 - [ ] Lint clean
+- [ ] Checked in Chrome or Edge (and the PDF, if print output changed)
 - [ ] Atomic commits in Conventional Commits format
 - [ ] Docs updated if behavior changed
 - [ ] Scoped to the linked issue only
@@ -28,6 +29,7 @@ Closes #
 - [ ] Every changed file is Markdown
 - [ ] Commits use `docs: ...`
 - [ ] Links and cross-references still resolve
+- [ ] `node tools/lint.mjs` passes (DEVELOPER.md in sync)
 
 ## TL;DR
 
