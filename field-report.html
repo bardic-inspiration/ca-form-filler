@@ -655,7 +655,7 @@ body.is-sorting { cursor: grabbing; user-select: none; }
 .row-hidden { display: none; }
 
 /* ==== SECTION: css — photos ==== */
-.photo-cell { display: flex; flex-direction: column; min-height: 100%; outline: none; }
+.photo-cell { display: flex; flex-direction: column; gap: 5px; padding: 5px; min-height: 100%; outline: none; }
 .photo-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .photo-cell.drag-over { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
 .photo { position: relative; margin: 0; line-height: 0; }
@@ -861,8 +861,8 @@ body.drop-file::after {
 .pr-table tr, .pr-rem-table tr { break-inside: avoid; }
 .pr-table td { white-space: pre-wrap; }
 .pr-table td.pr-item { font-size: 10pt; white-space: normal; }
-.pr-table td.pr-photo { padding: 0; white-space: normal; }
-.pr-photo img { display: block; width: 100%; height: auto; }
+.pr-table td.pr-photo { padding: 5px; white-space: normal; }
+.pr-photo img { display: block; width: 100%; height: auto; } .pr-photo img + img { margin-top: 5px; }
 .pr-pills { display: flex; flex-direction: column; align-items: flex-start; gap: 2pt; margin-top: 3pt; }
 .pr-pill { display: inline-block; padding: 0.5pt 4pt; border-radius: 6pt; font-size: 6.5pt; line-height: 1.3; background: #eee; white-space: nowrap; }
 .pr-pill.complete { background: var(--pill-complete-bg); color: var(--pill-complete-ink); }
