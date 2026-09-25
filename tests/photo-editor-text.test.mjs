@@ -77,13 +77,21 @@ async function evaluate(cdp, expression, { awaitPromise = false } = {}) {
   return res.result.value;
 }
 
+// Polls until the expression is truthy. While the page is still loading
+// (a slow CI runner) `document` can be empty, so errors mean "not yet".
 async function waitUntilTrue(cdp, expression, timeout = 10000) {
   const start = Date.now();
+  let lastError = null;
   while (Date.now() - start < timeout) {
-    if (await evaluate(cdp, expression)) return;
+    try {
+      if (await evaluate(cdp, expression)) return;
+      lastError = null;
+    } catch (err) {
+      lastError = err;
+    }
     await new Promise((r) => setTimeout(r, 50));
   }
-  throw new Error(`timed out waiting for: ${expression}`);
+  throw new Error(`timed out waiting for: ${expression}` + (lastError ? ` (last error: ${lastError.message})` : ''));
 }
 
 async function click(cdp, x, y, clickCount = 1) {
