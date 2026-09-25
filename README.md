@@ -107,9 +107,20 @@ Settings are saved with each report and apply right away.
 | Tags | Rename, recolor, delete or add tags |
 | Masthead logo, tagline, footer | Replace the logo or change the page 1 text |
 | Autosave every | How often the backup is taken |
+| Copy debug info | Copies a problem report to send to a maintainer (see section 9) |
 
 ## 9. Troubleshooting
 
+When something goes wrong, the tool shows a message saying what happened and
+what to do next.
+
+- **Sending a problem report.** Open Settings (gear icon) → Troubleshooting →
+  **Copy debug info**, then paste it into an email or chat to the maintainer.
+  If copying isn't allowed, the tool saves `field-report-debug.txt` to your
+  Downloads folder instead; attach that file. The report lists your browser,
+  which features it supports, and recent problems. It never includes your
+  report's text or photos. Copy it before reloading the page: the list of
+  problems is cleared when the page closes.
 - **On a phone, nothing happens when adding photos or exporting.** The file
   is probably open in another app's viewer (for example the Files app), which
   can't choose files or print. The tool shows a message when this happens.

@@ -41,6 +41,12 @@ Docs-only change (every changed file is `.md`)? Skip step 2; see §4.
 - **One issue = one branch = one PR.** Link it with `Closes #N`. Trivial fixes
   (typos, broken links) may skip the issue.
 - **Fill in the PR template**, including the plain-English `## TL;DR`.
+- **Screenshots for UI changes:** a PR that changes what users see includes
+  1–4 screenshots under `## Screenshots`. Commit them to
+  `dev/screenshots/pr-<N>/short-name.png` (open the PR first to get `<N>`) and
+  link each by commit so the link survives pruning:
+  `https://github.com/<owner>/<repo>/blob/<commit sha>/dev/screenshots/pr-<N>/<file>?raw=true`.
+  `dev/screenshots/` is for PR review only; stale folders may be pruned.
 - **Scope discipline:** implement the acceptance criteria, nothing more. No
   drive-by refactors or "while I'm here" fixes. Work that surfaces mid-issue but
   isn't in scope becomes its own issue ("Surfaced while working #N"), not a

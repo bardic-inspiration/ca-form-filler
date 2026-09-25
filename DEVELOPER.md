@@ -2,7 +2,8 @@
 
 Maintainer reference for `field-report.html`. Name and function only.
 `node tools/lint.mjs` fails when this file drifts from the code (sections, line
-ranges, functions, events); `node tools/lint.mjs --file-map` prints table 1.
+ranges, functions, events) or when errors bypass `notify` (§12);
+`node tools/lint.mjs --file-map` prints table 1.
 
 ## 1. File map
 
@@ -15,37 +16,39 @@ ranges, functions, events); `node tools/lint.mjs --file-map` prints table 1.
 | core — inheritance | 221–270 |
 | core — tags and filters | 271–299 |
 | core — undo history | 300–341 |
-| core — file formats | 342–469 |
-| css — tokens and base | 470–521 |
-| css — toolbar and page | 522–554 |
-| css — header form | 555–586 |
-| css — general observations | 587–599 |
-| css — observation table | 600–656 |
-| css — photos | 657–682 |
-| css — reminders | 683–690 |
-| css — popovers, dialogs, panel | 691–754 |
-| css — photo editor | 755–787 |
-| css — responsive | 788–817 |
-| css — print | 818–878 |
-| markup — shell | 879–917 |
-| app — dom helpers and icons | 918–1068 |
-| app — state and events | 1069–1158 |
-| app — dialogs and popovers | 1159–1234 |
-| app — render: toolbar and header | 1235–1428 |
-| app — render: general observations | 1429–1484 |
-| app — render: observations table | 1485–1693 |
-| app — render: filters and reminders | 1694–1785 |
-| app — sorting and column resize | 1786–1874 |
-| app — photos: import, cells, drag and drop | 1875–2080 |
-| app — photos: flatten and markup drawing | 2081–2268 |
-| app — photo editor | 2269–2808 |
-| app — persistence: files | 2809–2951 |
-| app — persistence: autosave (IndexedDB) | 2952–3037 |
-| app — export: CSV | 3038–3045 |
-| app — export: PDF (print) | 3046–3230 |
-| app — config panel | 3231–3411 |
-| app — office defaults (developer stub) | 3412–3426 |
-| app — keyboard, window events and init | 3427–3506 |
+| core — file formats | 342–456 |
+| core — messages and debug log | 457–603 |
+| css — tokens and base | 604–655 |
+| css — toolbar and page | 656–688 |
+| css — header form | 689–720 |
+| css — general observations | 721–733 |
+| css — observation table | 734–790 |
+| css — photos | 791–816 |
+| css — reminders | 817–824 |
+| css — popovers, dialogs, panel | 825–888 |
+| css — photo editor | 889–921 |
+| css — responsive | 922–951 |
+| css — print | 952–1012 |
+| markup — shell | 1013–1051 |
+| app — dom helpers and icons | 1052–1202 |
+| app — state and events | 1203–1293 |
+| app — dialogs and popovers | 1294–1372 |
+| app — notify: messages and debug log | 1373–1445 |
+| app — render: toolbar and header | 1446–1639 |
+| app — render: general observations | 1640–1695 |
+| app — render: observations table | 1696–1904 |
+| app — render: filters and reminders | 1905–1996 |
+| app — sorting and column resize | 1997–2085 |
+| app — photos: import, cells, drag and drop | 2086–2291 |
+| app — photos: flatten and markup drawing | 2292–2479 |
+| app — photo editor | 2480–3019 |
+| app — persistence: files | 3020–3170 |
+| app — persistence: autosave (IndexedDB) | 3171–3259 |
+| app — export: CSV | 3260–3267 |
+| app — export: PDF (print) | 3268–3451 |
+| app — config panel | 3452–3636 |
+| app — office defaults (developer stub) | 3637–3651 |
+| app — keyboard, window events and init | 3652–3744 |
 
 ## 2. Modules
 
@@ -126,6 +129,15 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `officeDefaultsJSON(report) → string` | Office-defaults JSON (config + tags). |
 | `applyOfficeDefaults(report, json) → report` | Replace config + tags from office-defaults JSON. |
 
+### core — messages and debug log
+
+| Function | Description |
+| --- | --- |
+| `userError(message) → Error` | Error with `userFacing: true`; `notify` shows its message as-is. |
+| `describeError(err) → string` | `Name: message` plus 5 stack lines; data URLs become `data:…`; capped at 1000 chars. |
+| `DebugLog` | Class: `add(level, code, detail, time)`, `entries`; keeps the last `DEBUG_LOG_LIMIT` (200). |
+| `formatDebugReport({ userAgent, capabilities, entries, now }) → string` | Plain-text debug report (§12). |
+
 ### app — dom helpers and icons
 
 | Function | Description |
@@ -139,8 +151,8 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `readFileAsDataURL(file) → Promise<string>` | File as data URL. |
 | `downloadBlob(name, blob)` | Trigger a download. |
 | `expectBrowserWindow(timeoutMs, onMissing) → mark()` | Call `onMissing` if no blur/visibility change (picker or print window) within the timeout. |
-| `openFilePicker(input)` | `showPicker()` (fallback `click()`); toast if no picker appears. |
-| `showEnvironmentNotice()` | Show `#notice` banner inside embedded WebViews. |
+| `openFilePicker(input)` | `showPicker()` (fallback `click()`); `notify.warn('FILE_PICKER_UNAVAILABLE')` if no picker appears. |
+| `showEnvironmentNotice()` | Inside embedded WebViews: log `EMBEDDED_VIEWER`, show its message in the `#notice` banner. |
 | `safeLocalGet(key) → string\|null` | localStorage read, never throws. |
 | `safeLocalSet(key, value)` | localStorage write, never throws. |
 
@@ -166,11 +178,22 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | --- | --- |
 | `modal({ title, body, buttons }) → Promise<string>` | Show `#dlg`; resolves with the clicked button value. |
 | `confirmDialog(message, opts) → Promise<boolean>` | OK/Cancel dialog. |
-| `alertDialog(message, title)` | Message dialog. |
+| `alertDialog(message, title, hint)` | Message dialog with an optional hint line. Called only by `notify`. |
 | `promptDialog(title, label, value) → Promise<string\|null>` | Text input dialog. |
 | `showPopover(anchor, content)` | Show `#popover` under an element. |
 | `closePopover()` | Hide the popover. |
 | `showMenu(anchor, items)` | Popover menu of `{ label, icon, run }`. |
+
+### app — notify: messages and debug log
+
+| Function | Description |
+| --- | --- |
+| `notify` | Frozen object: `info(code, opts)`, `warn(code, opts)`, `error(code, opts)`, `log(level, code, detail)` (§12). |
+| `messageText(code) → string` | Catalog message plus its "what to do" line. |
+| `notifyUser(level, code, { err, detail }) → Promise` | Log, then toast (info/warn) or dialog (error). |
+| `reportUncaught(err, detail)` | `window` `error`/`unhandledrejection`: set `data-error`, show `UNEXPECTED_ERROR` once at a time, log the rest. |
+| `detectCapabilities() → object` | Fill `capabilities` and log `CAPABILITIES`. |
+| `copyDebugInfo()` | Copy `formatDebugReport()` to the clipboard; else download `field-report-debug.txt`. |
 
 ### app — render: toolbar and header
 
@@ -353,7 +376,7 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `numberingField() → Element` | Presets, custom pattern, start number. |
 | `tagsEditor() → Element` | Rename, recolor, delete, add tags. |
 | `logoEditor() → Element` | Logo preview, replace, reset. |
-| `renderConfigPanel()` | Build `#config-panel`. |
+| `renderConfigPanel()` | Build `#config-panel` (Troubleshooting → Copy debug info calls `copyDebugInfo()`). |
 | `openConfig()` | Show the panel. |
 | `closeConfig()` | Hide the panel. |
 
@@ -369,7 +392,7 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | Function | Description |
 | --- | --- |
 | `bindGlobalEvents()` | Shortcuts, unload warning, autosave triggers, JSON drop, event listeners. |
-| `init()` | Build UI, load a blank report, WebView notice, set `data-ready`, offer recovery. |
+| `init()` | Route `window` errors to `reportUncaught()`, `detectCapabilities()`, build UI, load a blank report, WebView notice, set `data-ready`, offer recovery. |
 
 ## 3. State
 
@@ -402,7 +425,9 @@ original px \| null), `markup[]` (§9), `caption`, `fileName`.
 
 App-only `state`: `fileHandle`, `fileName`, `dirty`, `changeCount`,
 `autosavedCount`, `history`, `editKey`, `filter`, `autosaveTimer`,
-`printPrepared`, `printOpened`, `pendingPhotoTarget`, `hoverPhotoTarget`.
+`printPrepared`, `printOpened`, `autosaveWarned`, `pendingPhotoTarget`,
+`hoverPhotoTarget`. Also app-only: `debugLog` (`DebugLog`) and `capabilities`
+(§12); neither is ever written to a file.
 
 ## 4. Config
 
@@ -427,7 +452,9 @@ App-only `state`: `fileHandle`, `fileName`, `dirty`, `changeCount`,
 Other constants: `APP_ID`, `DEFAULTS_APP_ID`, `SCHEMA_VERSION`,
 `DEFAULT_COLUMN_WIDTHS`, `PDF_COLUMN_WIDTHS` (`[8, 38, 33, 21]`),
 `PHOTO_UPLOAD_MAX_SIDE`, `PHOTO_UPLOAD_QUALITY`, `HISTORY_LIMIT`,
-`TAG_COLORS`, `NUMBERING_PRESETS`, `CSV_COLUMNS`, `SNAPSHOT_KEYS`.
+`TAG_COLORS`, `NUMBERING_PRESETS`, `CSV_COLUMNS`, `SNAPSHOT_KEYS`,
+`MESSAGES`, `LOG_CODES`, `DEBUG_LOG_LIMIT`, `DEBUG_DETAIL_MAX`,
+`OPEN_IN_BROWSER_HELP`, `SEND_DEBUG_HELP`.
 
 ## 5. Events
 
@@ -447,7 +474,7 @@ Dispatched on `document` by `emit()`; `detail` is the payload.
 | --- | --- |
 | IndexedDB database / store / key | `wm-field-report` / `autosave` / `current` |
 | Autosave record | `{ savedAt, dirty, fileName, fileHandle, json }` |
-| localStorage | `wm-field-report:print-tip-shown` |
+| localStorage | `wm-field-report:print-tip-shown`; `wm-field-report:probe` (written and removed by `detectCapabilities()`) |
 | File System Access | `showOpenFilePicker` / `showSaveFilePicker`; handle kept in `state.fileHandle` (and in the autosave record); Save writes via `createWritable()` |
 | Fallback | `#file-json` input (opened by `openFilePicker()`) for Open; `downloadBlob()` for Save (Save As prompts for a name) |
 
@@ -515,7 +542,70 @@ Colors: `MARKUP_COLORS`. Widths: `STROKE_FACTORS` × longest image side.
 | `DEFAULT_CONFIG`, `DEFAULT_LOGO`, `DEFAULT_DISCLAIMER` | core — config defaults |
 | Numbering tokens | `{report}`, `{item}`; format suffix `:NN` (zero pad to NN digits) or `:A` (letters) |
 
-## 12. Inlined dependencies
+## 12. Errors and debug log
+
+Every problem the user can hit goes through `notify` (app — notify). Nothing
+else calls `alertDialog()` or `console.*`; `node tools/lint.mjs` enforces
+this and rejects an empty `catch` (or `.catch(() => {})`) with no comment.
+
+| Call | Presentation | Logged |
+| --- | --- | --- |
+| `notify.info(code, opts)` | Toast, 5 s | yes |
+| `notify.warn(code, opts)` | Toast, 9 s | yes |
+| `notify.error(code, opts)` | Dialog (title, message, "what to do" hint); for failures that stop an action | yes |
+| `notify.log(level, code, detail)` | None | yes |
+
+`opts`: `err` (the caught error; shown instead of the catalog message when
+`err.userFacing`, see `userError()`) and `detail` (log only). Success
+messages ("Saved …") still use `toast()` directly.
+
+User-facing codes (`MESSAGES`, each `{ title, message, action }`):
+
+| Code | Level | Raised by |
+| --- | --- | --- |
+| `FILE_PICKER_UNAVAILABLE` | warn | `openFilePicker()` |
+| `PRINT_UNAVAILABLE` | error | `exportPDF()` |
+| `EMBEDDED_VIEWER` | banner (logged) | `showEnvironmentNotice()` |
+| `OPEN_INVALID_FILE` | error | `openReportFile()`, JSON drop in `bindGlobalEvents()` |
+| `NEXT_REPORT_FAILED` | error | `newReportFromPrevious()` |
+| `RESTORE_FAILED` | error | `offerAutosaveRecovery()` |
+| `SAVE_FAILED` | error | `saveReport()` |
+| `STORAGE_UNAVAILABLE` | warn (once per visit) | `writeAutosave()` |
+| `IMAGE_UNREADABLE` | error | `addPhotosTo()`, `openPhotoEditor()`, logo input in `bindGlobalEvents()` |
+| `PDF_PREPARE_FAILED` | error | `exportPDF()` |
+| `DEBUG_INFO_DOWNLOADED` | info | `copyDebugInfo()` |
+| `UNEXPECTED_ERROR` | error | `reportUncaught()` |
+
+Log-only codes (`LOG_CODES`, value = description): `CAPABILITIES`,
+`SHOW_PICKER_FALLBACK`, `FS_ACCESS_FALLBACK`, `WRITE_PERMISSION_FAILED`,
+`AUTOSAVE_READ_FAILED`, `AUTOSAVE_WRITE_FAILED`, `PREVIEW_FAILED`,
+`CLIPBOARD_FALLBACK`, `EMBEDDED_VIEWER`, `RESIZE_OBSERVER_LOOP`.
+`tests/core.test.mjs` checks every code passed to `notify` is in a catalog.
+
+Debug log: `debugLog`, in memory only, last 200 entries
+`{ time (ISO, UTC), level (info|warn|error), code, detail (describeError()) }`.
+
+Capabilities (`detectCapabilities()`, logged once at startup):
+`fileSystemAccess`, `showPicker`, `indexedDB`, `localStorage`, `print`,
+`clipboard`, `embeddedWebView`, `originScheme` (`file:`, `content:`, …).
+
+Debug report (`formatDebugReport()`; Settings → Troubleshooting → Copy debug
+info). No report content or photos:
+
+```text
+Field Report debug info
+Generated: <ISO time>
+App: WM-FieldReport, schema <SCHEMA_VERSION>
+User agent: <navigator.userAgent>
+
+Capabilities:
+  <name>: <value>
+
+Log (<n> entries, oldest first):
+  <time> <level> <code> <detail>
+```
+
+## 13. Inlined dependencies
 
 None.
 
@@ -523,5 +613,5 @@ None.
 
 | Command | Checks |
 | --- | --- |
-| `node tools/lint.mjs` | Scripts parse, no network access, this file in sync |
+| `node tools/lint.mjs` | Scripts parse, no network access, errors go through `notify`, this file in sync |
 | `node --test` | Core logic (`tests/core.test.mjs`); headless Chrome boot and print (`tests/smoke.test.mjs`, needs Chrome/Chromium/Edge or `CHROME_PATH`) |
