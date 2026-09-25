@@ -369,6 +369,42 @@ function movePhoto(src, dest, photoId, beforeId) {
   return true;
 }
 
+// Crop rectangles are { x, y, w, h } in original-image px.
+// Rotate a crop 90° clockwise with a photo of the given (pre-rotation) height.
+function rotateCrop90(crop, height) {
+  return crop ? { x: height - (crop.y + crop.h), y: crop.x, w: crop.h, h: crop.w } : null;
+}
+
+// Drag a crop from `start`: edge is 'move' or a mix of n/s/e/w. The box stays
+// inside the W × H photo and at least `min` px on each side.
+function resizeCrop(start, edge, dx, dy, W, H, min) {
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  if (edge === 'move') {
+    return { x: clamp(start.x + dx, 0, W - start.w), y: clamp(start.y + dy, 0, H - start.h), w: start.w, h: start.h };
+  }
+  let x1 = start.x;
+  let y1 = start.y;
+  let x2 = start.x + start.w;
+  let y2 = start.y + start.h;
+  if (edge.includes('w')) x1 = clamp(x1 + dx, 0, x2 - min);
+  if (edge.includes('e')) x2 = clamp(x2 + dx, x1 + min, W);
+  if (edge.includes('n')) y1 = clamp(y1 + dy, 0, y2 - min);
+  if (edge.includes('s')) y2 = clamp(y2 + dy, y1 + min, H);
+  return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+}
+
+// Whole px inside the photo; null when the crop covers the whole photo.
+function normalizeCrop(crop, W, H) {
+  if (!crop) return null;
+  const x1 = Math.max(0, Math.round(crop.x));
+  const y1 = Math.max(0, Math.round(crop.y));
+  const x2 = Math.min(W, Math.round(crop.x + crop.w));
+  const y2 = Math.min(H, Math.round(crop.y + crop.h));
+  if (x2 <= x1 || y2 <= y1) return null;
+  if (x1 === 0 && y1 === 0 && x2 === W && y2 === H) return null;
+  return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+}
+
 /* ==== SECTION: core — undo history ==== */
 
 class History {
@@ -399,23 +435,32 @@ class History {
 
 const SNAPSHOT_KEYS = ['header', 'disclaimer', 'generalObservations', 'observations', 'inherited', 'tags'];
 
-// Photos are left out (too large), except their display overrides.
+// Photo display overrides and edits (crop, markup) go in the JSON. Originals
+// are too large to copy, so the snapshot holds them by reference.
 function snapshotReport(report) {
   const snap = {};
   for (const key of SNAPSHOT_KEYS) snap[key] = report[key];
   snap.photoDisplay = {};
+  snap.photoEdits = {};
+  const originals = {};
   for (const [id, p] of Object.entries(report.photos || {})) {
     if (p.display && Object.keys(p.display).length) snap.photoDisplay[id] = p.display;
+    snap.photoEdits[id] = { crop: p.crop, markup: p.markup };
+    originals[id] = p.original;
   }
-  return JSON.stringify(snap);
+  return { json: JSON.stringify(snap), originals };
 }
 
 function restoreSnapshot(report, snapshot) {
   if (snapshot == null) return report;
-  const { photoDisplay, ...rest } = JSON.parse(snapshot);
+  const { photoDisplay, photoEdits, ...rest } = JSON.parse(snapshot.json);
   Object.assign(report, rest);
   if (photoDisplay) {
     for (const [id, p] of Object.entries(report.photos || {})) p.display = photoDisplay[id] || {};
+  }
+  for (const [id, edit] of Object.entries(photoEdits || {})) {
+    const p = report.photos && report.photos[id];
+    if (p) Object.assign(p, { crop: edit.crop, markup: edit.markup, original: snapshot.originals[id] });
   }
   return renumber(report);
 }
@@ -680,6 +725,7 @@ const Core = Object.freeze({
   formatItemNumber, renumber, nextReportFrom, reminderGroups,
   tagUsage, deleteTag, matchesFilter, printColumnWidths,
   snapPhotoWidth, cellDisplay, effectivePhotoWidth, photoMaxHeightIn, printPhotoCellWidthIn, photoLayout, movePhoto,
+  rotateCrop90, resizeCrop, normalizeCrop,
   History, snapshotReport, restoreSnapshot,
   fileBaseName, referencedPhotoIds, serializeReport, migrate, normalizeReport, parseReport,
   csvField, toCSV, officeDefaultsJSON, applyOfficeDefaults,
@@ -902,14 +948,7 @@ body.is-sorting { cursor: grabbing; user-select: none; }
   position: fixed; left: 0; top: 0; z-index: 45; width: 96px; height: auto; pointer-events: none;
   border-radius: 4px; opacity: 0.9; box-shadow: 0 6px 18px rgba(0,0,0,0.35);
 }
-.photo-edit, .photo-remove {
-  position: absolute; display: inline-flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px; border: 0; border-radius: 50%; background: rgba(255,255,255,0.92);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3); color: var(--ink); line-height: 1;
-}
-.photo-edit { right: 6px; bottom: 6px; }
 .photo.selected { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 1; }
-.photo.selected .photo-edit, .photo.selected .photo-remove { right: 24px; opacity: 1; }
 .photo-handle { position: absolute; z-index: 2; width: 36px; height: 36px; touch-action: none; }
 .photo-handle::after {
   content: ""; position: absolute; left: 11px; top: 11px; width: 14px; height: 14px; border-radius: 50%;
@@ -928,9 +967,25 @@ body.is-sorting { cursor: grabbing; user-select: none; }
 .photo-cell-menu { grid-column: 3; justify-self: end; }
 .photo-menu { display: flex; flex-direction: column; gap: 6px; }
 .photo-menu .segmented button { min-width: 52px; min-height: 36px; }
-.photo-remove { right: 6px; top: 6px; opacity: 0; }
-.photo:hover .photo-remove, .photo:focus-within .photo-remove { opacity: 1; }
-@media (hover: none) { .photo-remove { opacity: 1; } }
+/* In-cell crop: the full photo at a fixed width, the outside dimmed. */
+.photo-cell[tabindex] .photo.cropping { cursor: default; }
+.photo.cropping img { max-height: none; }
+.crop-shade { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.crop-window { position: absolute; box-shadow: 0 0 0 100vmax rgba(0,0,0,0.55); }
+.crop-box { position: absolute; z-index: 2; outline: 2px solid #fff; box-shadow: 0 0 0 3px rgba(0,0,0,0.35); cursor: move; touch-action: none; }
+.crop-handle { position: absolute; width: 36px; height: 36px; touch-action: none; }
+.crop-handle::after {
+  content: ""; position: absolute; left: 11px; top: 11px; width: 14px; height: 14px; border-radius: 3px;
+  background: #fff; border: 2px solid var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.crop-handle[data-edge=n], .crop-handle[data-edge=s] { left: calc(50% - 18px); cursor: ns-resize; }
+.crop-handle[data-edge=e], .crop-handle[data-edge=w] { top: calc(50% - 18px); cursor: ew-resize; }
+.crop-handle[data-edge*=n] { top: -18px; }
+.crop-handle[data-edge*=s] { bottom: -18px; }
+.crop-handle[data-edge*=w] { left: -18px; }
+.crop-handle[data-edge*=e] { right: -18px; }
+.crop-handle[data-edge=nw], .crop-handle[data-edge=se] { cursor: nwse-resize; }
+.crop-handle[data-edge=ne], .crop-handle[data-edge=sw] { cursor: nesw-resize; }
 .photo-empty {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
   min-height: 110px; padding: 12px; color: var(--muted); font-size: 13px; text-align: center; cursor: pointer;
@@ -969,6 +1024,19 @@ body.is-sorting { cursor: grabbing; user-select: none; }
 .popover-row { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
 .popover input[type=text], .popover input[type=date] { flex: 1; min-height: 34px; padding: 5px 8px; border: 1px solid var(--line-strong); border-radius: 6px; }
 .popover hr { border: 0; border-top: 1px solid var(--line); margin: 8px 0; }
+.float-bar {
+  position: absolute; z-index: 55; display: flex; gap: 2px; padding: 4px;
+  background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 18px rgba(16,24,40,0.2);
+}
+.float-bar[hidden] { display: none; }
+.float-bar-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+  border: 0; border-radius: 7px; background: none; color: var(--ink);
+}
+.float-bar-btn:hover { background: #eef1f5; }
+.float-bar-btn.primary { background: var(--accent); color: #fff; }
+.float-bar-btn.primary:hover { filter: brightness(1.08); }
+.float-bar-btn.danger:hover { color: var(--danger); background: #fdecea; }
 
 .dlg { border: 0; border-radius: 12px; padding: 0; width: min(440px, calc(100vw - 32px)); box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
 .dlg::backdrop { background: rgba(15, 20, 30, 0.45); }
@@ -1080,7 +1148,7 @@ body.drop-file::after {
 #print-root { display: none; }
 @media print {
   html, body { background: #fff !important; }
-  #app, dialog, .config-panel, .popover, .toast, .busy, .drop-indicator { display: none !important; }
+  #app, dialog, .config-panel, .popover, .float-bar, .toast, .busy, .drop-indicator { display: none !important; }
   #print-root { display: block; }
 }
 .pr {
@@ -1168,6 +1236,7 @@ body.drop-file::after {
 <aside id="config-panel" class="config-panel" aria-label="Settings" hidden></aside>
 <dialog id="dlg" class="dlg"></dialog>
 <div id="popover" class="popover" hidden></div>
+<div id="float-bar" class="float-bar" role="toolbar" hidden></div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <div id="busy" class="busy" hidden></div>
 <div id="drop-indicator" class="drop-indicator"></div>
@@ -1381,6 +1450,7 @@ function endTextEdit() {
 }
 
 function undo() {
+  finishPhotoCrop(false);
   const snap = state.history.undo(snapshotReport(state.report));
   if (snap == null) return toast('Nothing to undo');
   restoreSnapshot(state.report, snap);
@@ -1390,6 +1460,7 @@ function undo() {
 }
 
 function redo() {
+  finishPhotoCrop(false);
   const snap = state.history.redo(snapshotReport(state.report));
   if (snap == null) return toast('Nothing to redo');
   restoreSnapshot(state.report, snap);
@@ -1498,6 +1569,54 @@ function showMenu(anchor, items) {
       type: 'button', class: 'menu-item', role: 'menuitem',
       onclick: () => { closePopover(); item.run(); },
     }, item.icon && icon(item.icon), item.label))));
+}
+
+/* ==== SECTION: app — floating toolbar ==== */
+
+// A toolbar floating above one element at a time (today: the selected photo).
+// actions: [{ name, label, icon, run, kind }], kind 'primary' or 'danger'.
+const floatBar = { anchor: null, observer: null };
+
+function showFloatingToolbar(anchor, actions, { label = 'Actions' } = {}) {
+  hideFloatingToolbar();
+  const bar = $('#float-bar');
+  bar.setAttribute('aria-label', label);
+  bar.replaceChildren(...actions.map((a) => h('button', {
+    type: 'button', class: 'float-bar-btn' + (a.kind ? ' ' + a.kind : ''), title: a.label, 'aria-label': a.label,
+    dataset: { action: a.name }, onclick: () => a.run(),
+  }, icon(a.icon))));
+  bar.hidden = false;
+  floatBar.anchor = anchor;
+  // Follows the anchor's size changes; fires with a zero box once it is removed.
+  floatBar.observer = new ResizeObserver(placeFloatingToolbar);
+  floatBar.observer.observe(anchor);
+  // An anchor built but not yet in the page is placed on the next frame.
+  if (anchor.isConnected) placeFloatingToolbar();
+  requestAnimationFrame(placeFloatingToolbar);
+}
+
+function hideFloatingToolbar() {
+  if (floatBar.observer) floatBar.observer.disconnect();
+  Object.assign(floatBar, { anchor: null, observer: null });
+  const bar = $('#float-bar');
+  bar.hidden = true;
+  bar.replaceChildren();
+}
+
+// Centered above the anchor (below it when there is no room), inside the viewport.
+function placeFloatingToolbar() {
+  const { anchor } = floatBar;
+  if (!anchor) return;
+  if (!anchor.isConnected) { hideFloatingToolbar(); return; }
+  const bar = $('#float-bar');
+  const r = anchor.getBoundingClientRect();
+  const gap = 8;
+  const above = r.top - bar.offsetHeight - gap;
+  const top = above >= gap ? above : r.bottom + gap;
+  const maxLeft = document.documentElement.clientWidth - bar.offsetWidth - gap;
+  const left = Math.max(gap, Math.min(r.left + r.width / 2 - bar.offsetWidth / 2, maxLeft));
+  bar.style.left = (left + scrollX) + 'px';
+  bar.style.top = (top + scrollY) + 'px';
 }
 
 /* ==== SECTION: app — notify: messages and debug log ==== */
@@ -2320,15 +2439,13 @@ function photoCell(target, ids, { readOnly = false, compact = false } = {}) {
 function photoFigure(photo, readOnly, width = 100) {
   const img = h('img', { alt: photo.caption || photo.fileName || 'Photo', draggable: false });
   setPhotoImage(img, photo);
-  const fig = h('figure', { class: 'photo', dataset: { photoId: photo.id } }, img);
+  const fig = h('figure', {
+    class: 'photo', dataset: { photoId: photo.id },
+    tabindex: readOnly ? null : '0', 'aria-label': readOnly ? null : 'Photo. Press Enter for photo actions.',
+  }, img);
   fig.style.setProperty('--w', width);
   trackAspect(img, fig);
   if (!readOnly && state.selectedPhotoId === photo.id) setPhotoSelected(fig, true);
-  if (!readOnly) {
-    fig.append(
-      h('button', { type: 'button', class: 'photo-edit', title: 'Edit photo', 'aria-label': 'Edit photo', dataset: { edit: photo.id } }, icon('pencil')),
-      h('button', { type: 'button', class: 'photo-remove', title: 'Remove photo', 'aria-label': 'Remove photo', dataset: { remove: photo.id } }, icon('close')));
-  }
   return fig;
 }
 
@@ -2363,19 +2480,8 @@ function dropBeforeId(cell, x, y, skipId = null) {
 function bindPhotoEvents() {
   const page = $('.page');
   page.addEventListener('click', (e) => {
-    const edit = e.target.closest('[data-edit]');
-    if (edit) return openPhotoEditor(edit.dataset.edit);
     const menu = e.target.closest('[data-cell-menu]');
     if (menu) return showPhotoCellMenu(menu, menu.dataset.cellMenu);
-    const remove = e.target.closest('[data-remove]');
-    if (remove) {
-      const target = remove.closest('.photo-cell').dataset.target;
-      const list = photoList(target);
-      checkpoint();
-      list.splice(list.indexOf(remove.dataset.remove), 1);
-      markDirty();
-      return refreshPhotoCell(target);
-    }
     const pick = e.target.closest('[data-pick]');
     if (pick) {
       state.pendingPhotoTarget = pick.dataset.pick;
@@ -2452,7 +2558,7 @@ function bindPhotoDrag() {
     if (photoDrag || e.button > 0 || !e.isPrimary) return;
     const fig = e.target.closest('.photo');
     const cell = fig && fig.closest('.photo-cell[tabindex]');
-    if (!cell || e.target.closest('button, .photo-handle')) return;
+    if (!cell || fig.classList.contains('cropping') || e.target.closest('button, .photo-handle')) return;
     photoDrag = {
       pointerId: e.pointerId, pointerType: e.pointerType, fig, from: cell.dataset.target, photoId: fig.dataset.photoId,
       startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, active: false, timer: null,
@@ -2609,20 +2715,54 @@ function selectPhoto(id) {
 function setPhotoSelected(fig, on) {
   fig.classList.toggle('selected', on);
   $$('.photo-handle, .photo-size', fig).forEach((el) => el.remove());
-  if (!on) return;
+  if (!on) {
+    if (floatBar.anchor === fig) hideFloatingToolbar();
+    return;
+  }
   fig.append(
     ...PHOTO_CORNERS.map((corner) => h('span', { class: 'photo-handle', dataset: { corner }, 'aria-hidden': 'true' })),
     h('span', { class: 'photo-size' }, fig.style.getPropertyValue('--w') + '%'));
+  showFloatingToolbar(fig, photoToolbarActions(fig), { label: 'Photo actions' });
+}
+
+function photoToolbarActions(fig) {
+  const id = fig.dataset.photoId;
+  return [
+    { name: 'crop', label: 'Crop', icon: 'crop', run: () => startPhotoCrop(fig) },
+    { name: 'rotate', label: 'Rotate 90°', icon: 'rotate', run: () => rotatePhoto(id) },
+    { name: 'edit', label: 'Edit photo', icon: 'pencil', run: () => openPhotoEditor(id) },
+    { name: 'remove', label: 'Remove photo', icon: 'trash', kind: 'danger', run: () => removePhoto(fig.closest('.photo-cell').dataset.target, id) },
+  ];
+}
+
+function removePhoto(target, photoId) {
+  const list = photoList(target);
+  if (!list || !list.includes(photoId)) return;
+  checkpoint();
+  list.splice(list.indexOf(photoId), 1);
+  if (state.selectedPhotoId === photoId) state.selectedPhotoId = null;
+  markDirty();
+  refreshPhotoCell(target);
 }
 
 function bindPhotoResize() {
-  // Tapping or clicking anywhere else clears the selection.
+  // Tapping or clicking anywhere else applies a crop and clears the selection.
   document.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.float-bar')) return;
+    if (photoCrop && !photoCrop.fig.contains(e.target)) finishPhotoCrop(true);
     if (state.selectedPhotoId && !e.target.closest('.photo.selected')) selectPhoto(null);
   }, true);
   $('.page').addEventListener('pointerdown', (e) => {
     const handle = e.target.closest('.photo-handle');
     if (handle && e.button <= 0) startPhotoResize(e, handle);
+  });
+  // Keyboard: Enter or Space on a photo selects it and moves focus to its toolbar.
+  $('.page').addEventListener('keydown', (e) => {
+    const fig = e.target.closest('.photo');
+    if (!fig || e.target !== fig || (e.key !== 'Enter' && e.key !== ' ') || fig.classList.contains('cropping')) return;
+    e.preventDefault();
+    selectPhoto(fig.dataset.photoId);
+    requestAnimationFrame(() => { const first = $('#float-bar button'); if (first) first.focus(); });
   });
 }
 
@@ -2699,6 +2839,133 @@ function showPhotoCellMenu(anchor, target) {
       type: 'button', class: 'menu-item', disabled: !overridden.length,
       onclick: () => apply(() => overridden.forEach((id) => { delete r.photos[id].display.width; })),
     }, 'Reset photos to cell default')));
+}
+
+/* ==== SECTION: app — photos: in-cell crop and rotate ==== */
+
+const CROP_MIN_PX = 24;
+const CROP_EDGES = ['n', 'e', 's', 'w', 'nw', 'ne', 'sw', 'se'];
+
+// Current in-cell crop: { fig, photo, target, W, H, box }, or null.
+let photoCrop = null;
+let photoRotating = false;
+
+// Crop mode: the full photo at the photo's current width, the outside dimmed,
+// a crop box with corner and edge handles, and a ✓ / ✕ toolbar.
+async function startPhotoCrop(fig) {
+  const photo = state.report.photos[fig.dataset.photoId];
+  if (!photo || photoCrop) return undefined;
+  let img;
+  try {
+    img = await loadImage(photo.original);
+  } catch (err) {
+    return notify.error('IMAGE_UNREADABLE', { err });
+  }
+  if (!fig.isConnected || photoCrop) return undefined;
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+  photoCrop = {
+    fig, photo, target: fig.closest('.photo-cell').dataset.target, W, H,
+    box: photo.crop ? { ...photo.crop } : { x: 0, y: 0, w: W, h: H },
+  };
+  fig.style.width = fig.getBoundingClientRect().width + 'px';
+  fig.style.setProperty('--ar', W / H);
+  fig.classList.add('cropping');
+  $$('.photo-handle, .photo-size', fig).forEach((el) => el.remove());
+  const pic = $('img', fig);
+  pic.src = photo.original;
+  if (photo.markup.length) {
+    flattenPhoto({ ...photo, id: photo.id + ':uncropped', crop: null }, 1000, 0.85)
+      .then((url) => { if (photoCrop && photoCrop.fig === fig) pic.src = url; })
+      .catch((err) => notify.log('warn', 'PREVIEW_FAILED', err));
+  }
+  fig.append(
+    h('div', { class: 'crop-shade' }, h('div', { class: 'crop-window' })),
+    h('div', { class: 'crop-box' }, CROP_EDGES.map((edge) => h('span', { class: 'crop-handle', dataset: { edge }, 'aria-hidden': 'true' }))));
+  placeCropBox();
+  showFloatingToolbar(fig, [
+    { name: 'apply', label: 'Apply crop', icon: 'check', kind: 'primary', run: () => finishPhotoCrop(true) },
+    { name: 'cancel', label: 'Cancel crop', icon: 'close', run: () => finishPhotoCrop(false) },
+  ], { label: 'Crop' });
+  return undefined;
+}
+
+function placeCropBox() {
+  const { fig, W, H, box } = photoCrop;
+  const pct = {
+    left: (box.x / W) * 100 + '%', top: (box.y / H) * 100 + '%',
+    width: (box.w / W) * 100 + '%', height: (box.h / H) * 100 + '%',
+  };
+  Object.assign($('.crop-window', fig).style, pct);
+  Object.assign($('.crop-box', fig).style, pct);
+}
+
+// Drag a handle (resize) or the box itself (move); pointercancel reverts.
+function startCropDrag(e) {
+  const c = photoCrop;
+  const el = e.target.closest('.crop-handle') || e.target.closest('.crop-box');
+  const edge = el.dataset.edge || 'move';
+  e.preventDefault();
+  e.stopPropagation();
+  const scale = c.W / c.fig.clientWidth;
+  const min = Math.min(CROP_MIN_PX * scale, c.W, c.H);
+  const start = { ...c.box };
+  el.setPointerCapture(e.pointerId);
+  const move = (ev) => {
+    if (ev.pointerId !== e.pointerId || photoCrop !== c) return;
+    c.box = resizeCrop(start, edge, (ev.clientX - e.clientX) * scale, (ev.clientY - e.clientY) * scale, c.W, c.H, min);
+    placeCropBox();
+  };
+  const end = (ev) => {
+    if (ev.pointerId !== e.pointerId) return;
+    el.removeEventListener('pointermove', move);
+    el.removeEventListener('pointerup', end);
+    el.removeEventListener('pointercancel', end);
+    if (ev.type === 'pointercancel' && photoCrop === c) { c.box = start; placeCropBox(); }
+  };
+  el.addEventListener('pointermove', move);
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+}
+
+// Leave crop mode; apply writes photo.crop as one undo step when it changed.
+function finishPhotoCrop(apply) {
+  const c = photoCrop;
+  if (!c) return;
+  photoCrop = null;
+  const crop = normalizeCrop(c.box, c.W, c.H);
+  if (apply && JSON.stringify(crop) !== JSON.stringify(c.photo.crop)) {
+    checkpoint();
+    c.photo.crop = crop;
+    markDirty();
+  }
+  if (floatBar.anchor === c.fig) hideFloatingToolbar();
+  refreshPhotoCell(c.target);
+}
+
+function bindPhotoCrop() {
+  $('.page').addEventListener('pointerdown', (e) => {
+    if (photoCrop && e.button <= 0 && e.isPrimary && e.target.closest('.photo.cropping .crop-box')) startCropDrag(e);
+  });
+}
+
+// Quick rotate: the same 90° clockwise turn as the photo editor, one undo step.
+async function rotatePhoto(photoId) {
+  const photo = state.report.photos[photoId];
+  if (!photo || photoRotating) return;
+  photoRotating = true;
+  try {
+    const img = await loadImage(photo.original);
+    const before = snapshotReport(state.report);
+    Object.assign(photo, rotatePhotoData(photo, img));
+    checkpoint(before);
+    markDirty();
+    emit('photo:changed', { photoId });
+  } catch (err) {
+    notify.error('IMAGE_UNREADABLE', { err });
+  } finally {
+    photoRotating = false;
+  }
 }
 
 /* ==== SECTION: app — photos: flatten and markup drawing ==== */
@@ -2889,6 +3156,21 @@ function rotateShape90(s, height, ctx) {
   } else { [s.x1, s.y1] = rot(s.x1, s.y1); [s.x2, s.y2] = rot(s.x2, s.y2); }
 }
 
+// Turn { original, crop, markup } 90° clockwise; img is the decoded original.
+// Shared by the photo editor and the in-cell rotate.
+function rotatePhotoData(data, img) {
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+  const canvas = h('canvas', { width: H, height: W });
+  const ctx = canvas.getContext('2d');
+  ctx.translate(H, 0);
+  ctx.rotate(Math.PI / 2);
+  ctx.drawImage(img, 0, 0);
+  const markup = clone(data.markup);
+  markup.forEach((s) => rotateShape90(s, H, ctx));
+  return { original: canvas.toDataURL('image/jpeg', PHOTO_UPLOAD_QUALITY), crop: rotateCrop90(data.crop, H), markup };
+}
+
 /* ==== SECTION: app — photo editor ==== */
 
 const EDITOR_TOOLS = [
@@ -2999,7 +3281,11 @@ function closePhotoEditor(save) {
   if (save) {
     const photo = state.report.photos[editor.photoId];
     if (photo) {
-      Object.assign(photo, { original: editor.work.original, crop: editor.work.crop, markup: editor.work.markup });
+      const w = editor.work;
+      const changed = photo.original !== w.original || JSON.stringify(photo.crop) !== JSON.stringify(w.crop)
+        || JSON.stringify(photo.markup) !== JSON.stringify(w.markup);
+      if (changed) checkpoint();
+      Object.assign(photo, { original: w.original, crop: w.crop, markup: w.markup });
       markDirty();
       emit('photo:changed', { photoId: photo.id });
     }
@@ -3140,24 +3426,9 @@ function deleteSelectedShape() {
 }
 
 async function rotateEditorPhoto() {
-  const img = editor.img;
-  const W = img.naturalWidth;
-  const H = img.naturalHeight;
   pushEditorUndo();
-  const canvas = h('canvas', { width: H, height: W });
-  const ctx = canvas.getContext('2d');
-  ctx.translate(H, 0);
-  ctx.rotate(Math.PI / 2);
-  ctx.drawImage(img, 0, 0);
-  const measure = $('#pe-canvas').getContext('2d');
-  const work = editor.work;
-  work.original = canvas.toDataURL('image/jpeg', PHOTO_UPLOAD_QUALITY);
-  if (work.crop) {
-    const c = work.crop;
-    work.crop = { x: H - (c.y + c.h), y: c.x, w: c.h, h: c.w };
-  }
-  work.markup.forEach((s) => rotateShape90(s, H, measure));
-  editor.img = await loadImage(work.original);
+  editor.work = rotatePhotoData(editor.work, editor.img);
+  editor.img = await loadImage(editor.work.original);
   fitEditor();
 }
 
@@ -4092,7 +4363,10 @@ function bindGlobalEvents() {
     if ($('#dlg').open) return undefined;
     const mod = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
-    if (mod && key === 's') { e.preventDefault(); saveReport({ saveAs: e.shiftKey }); }
+    if (photoCrop && (key === 'escape' || (key === 'enter' && !e.target.closest('button, input, textarea, select')))) {
+      e.preventDefault();
+      finishPhotoCrop(key === 'enter');
+    } else if (mod && key === 's') { e.preventDefault(); saveReport({ saveAs: e.shiftKey }); }
     else if (mod && key === 'p') { e.preventDefault(); exportPDF(); }
     else if (mod && key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
     else if (mod && (key === 'y' || (key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
@@ -4101,6 +4375,7 @@ function bindGlobalEvents() {
   });
   document.addEventListener('keyup', (e) => { if (editorIsOpen()) editorKeyup(e); });
 
+  window.addEventListener('resize', placeFloatingToolbar);
   window.addEventListener('beforeunload', (e) => {
     if (!state.dirty) return;
     writeAutosave();
@@ -4168,6 +4443,7 @@ function init() {
   bindPhotoEvents();
   bindPhotoDrag();
   bindPhotoResize();
+  bindPhotoCrop();
   bindPrintEvents();
   loadReport(createReport());
   showEnvironmentNotice();
