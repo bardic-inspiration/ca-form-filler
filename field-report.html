@@ -889,6 +889,11 @@ textarea.autogrow { field-sizing: content; resize: none; overflow: hidden; min-h
   display: block; width: 100%; min-height: 100%; padding: 8px; border: 0; background: transparent;
   line-height: 1.4;
 }
+/* Table rows size to their tallest cell (e.g. a photo). A percentage height
+   on a table cell's child doesn't resolve against that stretched row height,
+   so pin the textarea to the cell's edges instead to actually fill it. */
+.obs-table td:has(.cell-text) { position: relative; }
+.cell-text.autogrow { position: absolute; inset: 0; field-sizing: fixed; overflow-y: auto; }
 .cell-text:focus { outline: 2px solid var(--accent); outline-offset: -2px; background: #fbfcff; }
 .item-cell { padding: 8px 6px !important; }
 .item-num { font-weight: 700; font-size: 15px; }

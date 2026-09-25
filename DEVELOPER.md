@@ -23,37 +23,37 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 | css — toolbar and page | 788–820 |
 | css — header form | 821–852 |
 | css — general observations | 853–865 |
-| css — observation table | 866–922 |
-| css — photos | 923–998 |
-| css — reminders | 999–1006 |
-| css — popovers, dialogs, panel | 1007–1083 |
-| css — photo editor | 1084–1116 |
-| css — responsive | 1117–1146 |
-| css — print | 1147–1208 |
-| markup — shell | 1209–1248 |
-| app — dom helpers and icons | 1249–1399 |
-| app — state and events | 1400–1494 |
-| app — dialogs and popovers | 1495–1573 |
-| app — floating toolbar | 1574–1621 |
-| app — notify: messages and debug log | 1622–1694 |
-| app — render: toolbar and header | 1695–1888 |
-| app — render: general observations | 1889–1944 |
-| app — render: observations table | 1945–2153 |
-| app — render: filters and reminders | 2154–2245 |
-| app — sorting and column resize | 2246–2335 |
-| app — photos: import, cells, drag and drop | 2336–2541 |
-| app — photos: pointer drag | 2542–2704 |
-| app — photos: selection, resize and cell menu | 2705–2843 |
-| app — photos: in-cell crop and rotate | 2844–2970 |
-| app — photos: flatten and markup drawing | 2971–3173 |
-| app — photo editor | 3174–3706 |
-| app — persistence: files | 3707–3857 |
-| app — persistence: autosave (IndexedDB) | 3858–3946 |
-| app — export: CSV | 3947–3954 |
-| app — export: PDF (print) | 3955–4154 |
-| app — config panel | 4155–4342 |
-| app — office defaults (developer stub) | 4343–4357 |
-| app — keyboard, window events and init | 4358–4458 |
+| css — observation table | 866–927 |
+| css — photos | 928–1003 |
+| css — reminders | 1004–1011 |
+| css — popovers, dialogs, panel | 1012–1088 |
+| css — photo editor | 1089–1121 |
+| css — responsive | 1122–1151 |
+| css — print | 1152–1213 |
+| markup — shell | 1214–1253 |
+| app — dom helpers and icons | 1254–1404 |
+| app — state and events | 1405–1499 |
+| app — dialogs and popovers | 1500–1578 |
+| app — floating toolbar | 1579–1626 |
+| app — notify: messages and debug log | 1627–1699 |
+| app — render: toolbar and header | 1700–1893 |
+| app — render: general observations | 1894–1949 |
+| app — render: observations table | 1950–2158 |
+| app — render: filters and reminders | 2159–2250 |
+| app — sorting and column resize | 2251–2340 |
+| app — photos: import, cells, drag and drop | 2341–2546 |
+| app — photos: pointer drag | 2547–2709 |
+| app — photos: selection, resize and cell menu | 2710–2848 |
+| app — photos: in-cell crop and rotate | 2849–2975 |
+| app — photos: flatten and markup drawing | 2976–3178 |
+| app — photo editor | 3179–3711 |
+| app — persistence: files | 3712–3862 |
+| app — persistence: autosave (IndexedDB) | 3863–3951 |
+| app — export: CSV | 3952–3959 |
+| app — export: PDF (print) | 3960–4159 |
+| app — config panel | 4160–4347 |
+| app — office defaults (developer stub) | 4348–4362 |
+| app — keyboard, window events and init | 4363–4463 |
 
 ## 2. Modules
 
