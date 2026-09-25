@@ -1140,6 +1140,10 @@ body.drop-file::after {
   .obs-table td[data-label]::before {
     content: attr(data-label); display: block; padding: 6px 8px 0; font-size: 12px; font-weight: 700; color: var(--muted);
   }
+  /* Cells stack as cards here instead of sharing a row height, so let the
+     textarea size to its own text again instead of filling the cell. */
+  .obs-table td:has(.cell-text) { position: static; }
+  .cell-text.autogrow { position: static; inset: auto; field-sizing: content; overflow: hidden; }
   .item-cell { display: flex !important; flex-wrap: wrap; align-items: center; gap: 6px; }
   .item-cell .pills { flex-direction: row; flex-wrap: wrap; margin-top: 0; }
   .item-cell .row-controls { margin: 0 0 0 auto; order: 3; }
