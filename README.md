@@ -42,9 +42,22 @@ them as PDFs that match the Word template.
 
 1. Drop photos onto a Supporting Photo box, paste one (Ctrl+V) while the
    mouse is over the box, or click the box to choose files. Several photos
-   stack in one box.
-2. Drag a photo to reorder it, or onto another row to move it.
-3. Click the pencil to open the photo editor:
+   share one box.
+2. **Move a photo:** drag it to reorder it, onto another row, or between the
+   table and General Observations. On a phone or tablet, press and hold the
+   photo until it lifts, then drag (a quick swipe just scrolls). A blue line
+   shows where it will land. Press Esc, or let go outside a photo box, to
+   cancel. Ctrl+Z undoes a move.
+3. **Size a photo:** tap or click it to select it, then drag a corner handle.
+   The width it will have in the PDF is shown while you drag and snaps to
+   25, 50, 75 and 100 % of the box. Narrower photos sit side by side.
+4. **Set a whole box:** the **⋯** button under a photo box sets the default
+   width and the alignment (left or center) of its photos. *Reset photos to
+   cell default* clears sizes set on single photos. General Observations
+   photos work the same way.
+5. The screen shows the same layout as the PDF. Tall photos are limited to
+   a maximum height (see Settings → PDF).
+6. Click the pencil to open the photo editor:
    - tools: select/move, circle, arrow, pen, line, dimension (a line with a
      label such as 19"), text, and crop;
    - pick a color and a line thickness before drawing;
@@ -52,7 +65,7 @@ them as PDFs that match the Word template.
      drag (or drag with two fingers) to move around;
    - rotate turns a sideways photo; *Reset crop* undoes cropping;
    - select a drawing and press Delete to remove it.
-4. Click **Save** to keep your changes, or **Cancel**. Drawings stay
+7. Click **Save** to keep your changes, or **Cancel**. Drawings stay
    editable later.
 
 ## 5. Saving and opening
@@ -102,6 +115,8 @@ Settings are saved with each report and apply right away.
 | Show scope tags | PDF shows tags under each item number |
 | Show Reminders section | PDF includes Open Items from Previous Reports |
 | Photo export size / quality | Smaller numbers make smaller PDFs |
+| Table photo max height | Tallest a table photo may print, 1–6 in (default 2 in) |
+| General Observations image max height | Tallest a General Observations photo may print, 1–6 in (default 4 in) |
 | Default markup color | Starting color in the photo editor |
 | Default disclaimer text | Disclaimer for new reports |
 | Tags | Rename, recolor, delete or add tags |

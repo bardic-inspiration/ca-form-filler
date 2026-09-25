@@ -35,6 +35,8 @@ const DEFAULT_CONFIG = {
   pdfShowReminders: true,
   photoExportMaxSide: 600,
   photoExportQuality: 0.8,
+  photoMaxHeightTable: 2, // inches, 1–6
+  photoMaxHeightGeneral: 4, // inches, 1–6
   markupColor: '#F26A21',
   disclaimer: DEFAULT_DISCLAIMER,
   logo: null, // null = DEFAULT_LOGO
@@ -50,6 +52,11 @@ const DEFAULT_COLUMN_WIDTHS = [8, 36, 32, 24];
 const PDF_COLUMN_WIDTHS = [8, 38, 33, 21];
 const PHOTO_UPLOAD_MAX_SIDE = 1600;
 const PHOTO_UPLOAD_QUALITY = 0.85;
+const PHOTO_WIDTH_STEPS = [25, 50, 75, 100]; // % of the photo cell
+const PHOTO_WIDTH_MIN = 10;
+const PHOTO_WIDTH_SNAP = 4; // snap to a step within this many %
+const PHOTO_MAX_HEIGHT_RANGE = [1, 6]; // inches
+const PRINT_CONTENT_WIDTH_IN = 6.5; // Letter minus 1in side margins
 const HISTORY_LIMIT = 100;
 
 const TAG_COLORS = {
@@ -173,11 +180,11 @@ function createObservation(report) {
 }
 
 function createGeneralObservation() {
-  return { id: uuid(), text: '', images: [] };
+  return { id: uuid(), text: '', images: [], display: {} };
 }
 
 function createPhoto(dataUrl, fileName) {
-  return { id: uuid(), original: dataUrl, crop: null, markup: [], caption: '', fileName: fileName || '' };
+  return { id: uuid(), original: dataUrl, crop: null, markup: [], caption: '', fileName: fileName || '', display: {} };
 }
 
 function setStatus(item, status, date) {
@@ -297,6 +304,71 @@ function printColumnWidths(report) {
   return (report.config.pdfUseScreenWidths ? report.ui.columnWidths : PDF_COLUMN_WIDTHS).slice();
 }
 
+/* ==== SECTION: core — photo display ==== */
+
+// A number in 10–100 (rounded), else null.
+function validPhotoWidth(value) {
+  const n = typeof value === 'number' ? value : NaN;
+  return n >= PHOTO_WIDTH_MIN && n <= 100 ? Math.round(n) : null;
+}
+
+function snapPhotoWidth(pct) {
+  const n = Number(pct);
+  if (!Number.isFinite(n)) return 100;
+  const v = Math.min(100, Math.max(PHOTO_WIDTH_MIN, n));
+  const step = PHOTO_WIDTH_STEPS.find((s) => Math.abs(s - v) <= PHOTO_WIDTH_SNAP);
+  return step || Math.round(v);
+}
+
+// kind: 'obs' (table cell) or 'gen' (general observation).
+function cellDisplay(display, kind) {
+  const d = display || {};
+  return {
+    photoWidth: validPhotoWidth(d.photoWidth) || 100,
+    photoAlign: d.photoAlign === 'left' || d.photoAlign === 'center' ? d.photoAlign : (kind === 'gen' ? 'center' : 'left'),
+  };
+}
+
+function effectivePhotoWidth(photo, cell) {
+  return validPhotoWidth(photo && photo.display && photo.display.width) || cell.photoWidth;
+}
+
+function photoMaxHeightIn(config, kind) {
+  const key = kind === 'gen' ? 'photoMaxHeightGeneral' : 'photoMaxHeightTable';
+  const n = Number(config[key]);
+  const [min, max] = PHOTO_MAX_HEIGHT_RANGE;
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : DEFAULT_CONFIG[key];
+}
+
+// Content width of a photo cell in the PDF, in inches (mirrors css — print).
+function printPhotoCellWidthIn(report, kind) {
+  const pt = (n) => n / 72;
+  if (kind === 'gen') return PRINT_CONTENT_WIDTH_IN - pt(5 + 2 + 12 + 36 + 4);
+  const table = PRINT_CONTENT_WIDTH_IN - pt(6);
+  return table * (printColumnWidths(report)[2] / 100) - 10 / 96;
+}
+
+function photoLayout(report, kind, display, ids) {
+  const cell = cellDisplay(display, kind);
+  return {
+    align: cell.photoAlign,
+    maxHeightIn: photoMaxHeightIn(report.config, kind),
+    photos: ids.filter((id) => report.photos[id])
+      .map((id) => ({ id, width: effectivePhotoWidth(report.photos[id], cell) })),
+  };
+}
+
+// Move photoId from src to dest before beforeId (end when null). False if nothing changed.
+function movePhoto(src, dest, photoId, beforeId) {
+  const from = src.indexOf(photoId);
+  if (from < 0 || photoId === beforeId) return false;
+  if (src === dest && (src[from + 1] || null) === (beforeId || null)) return false;
+  src.splice(from, 1);
+  const at = beforeId == null ? -1 : dest.indexOf(beforeId);
+  if (at < 0) dest.push(photoId); else dest.splice(at, 0, photoId);
+  return true;
+}
+
 /* ==== SECTION: core — undo history ==== */
 
 class History {
@@ -327,15 +399,24 @@ class History {
 
 const SNAPSHOT_KEYS = ['header', 'disclaimer', 'generalObservations', 'observations', 'inherited', 'tags'];
 
+// Photos are left out (too large), except their display overrides.
 function snapshotReport(report) {
   const snap = {};
   for (const key of SNAPSHOT_KEYS) snap[key] = report[key];
+  snap.photoDisplay = {};
+  for (const [id, p] of Object.entries(report.photos || {})) {
+    if (p.display && Object.keys(p.display).length) snap.photoDisplay[id] = p.display;
+  }
   return JSON.stringify(snap);
 }
 
 function restoreSnapshot(report, snapshot) {
   if (snapshot == null) return report;
-  Object.assign(report, JSON.parse(snapshot));
+  const { photoDisplay, ...rest } = JSON.parse(snapshot);
+  Object.assign(report, rest);
+  if (photoDisplay) {
+    for (const [id, p] of Object.entries(report.photos || {})) p.display = photoDisplay[id] || {};
+  }
   return renumber(report);
 }
 
@@ -389,12 +470,16 @@ function normalizeReport(data) {
   if (typeof data.disclaimer === 'string') report.disclaimer = data.disclaimer;
   report.generalObservations = (data.generalObservations || []).map((g) => ({
     ...createGeneralObservation(), ...g, images: Array.isArray(g.images) ? g.images : [],
+    display: g.display && typeof g.display === 'object' ? g.display : {},
   }));
   report.observations = (data.observations || []).map((o) => normalizeItem(o, report));
   report.inherited = (data.inherited || []).map((o) => normalizeItem(o, report));
   report.photos = {};
   for (const [id, p] of Object.entries(data.photos || {})) {
-    report.photos[id] = { ...createPhoto('', ''), ...p, id, markup: Array.isArray(p.markup) ? p.markup : [] };
+    report.photos[id] = {
+      ...createPhoto('', ''), ...p, id, markup: Array.isArray(p.markup) ? p.markup : [],
+      display: p.display && typeof p.display === 'object' ? p.display : {},
+    };
   }
   const widths = data.ui && data.ui.columnWidths;
   if (Array.isArray(widths) && widths.length === 4 && widths.every((w) => w > 0)) {
@@ -589,11 +674,12 @@ function formatDebugReport({ userAgent = '', capabilities = {}, entries = [], no
 
 const Core = Object.freeze({
   DEFAULT_CONFIG, DEFAULT_LOGO, APP_ID, SCHEMA_VERSION, TAG_COLORS, NUMBERING_PRESETS, CSV_COLUMNS,
-  DEFAULT_COLUMN_WIDTHS, PDF_COLUMN_WIDTHS,
+  DEFAULT_COLUMN_WIDTHS, PDF_COLUMN_WIDTHS, PHOTO_WIDTH_STEPS,
   uuid, clone, pad, isoDate, formatDate, toLetters, moveById, isEmbeddedWebView,
   createReport, createObservation, createGeneralObservation, createPhoto, setStatus, reportTitle,
   formatItemNumber, renumber, nextReportFrom, reminderGroups,
   tagUsage, deleteTag, matchesFilter, printColumnWidths,
+  snapPhotoWidth, cellDisplay, effectivePhotoWidth, photoMaxHeightIn, printPhotoCellWidthIn, photoLayout, movePhoto,
   History, snapshotReport, restoreSnapshot,
   fileBaseName, referencedPhotoIds, serializeReport, migrate, normalizeReport, parseReport,
   csvField, toCSV, officeDefaultsJSON, applyOfficeDefaults,
@@ -789,18 +875,59 @@ body.is-sorting { cursor: grabbing; user-select: none; }
 .row-hidden { display: none; }
 
 /* ==== SECTION: css — photos ==== */
-.photo-cell { display: flex; flex-direction: column; gap: 5px; padding: 5px; min-height: 100%; outline: none; }
+.photo-cell {
+  display: flex; flex-direction: column; gap: 5px; padding: 5px; min-height: 100%; outline: none;
+  container-type: inline-size;
+}
 .photo-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .photo-cell.drag-over { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
-.photo { position: relative; margin: 0; line-height: 0; }
-.photo img { display: block; width: 100%; height: auto; background: #eef0f3; min-height: 40px; }
+/* Flow layout. --w: the photo's width in % of the cell. --cap-h: its max
+   height (screen: the print cap scaled by --cap-ratio, the cap over the print
+   cell width). --ar: the image's aspect ratio, set on load, so a capped photo
+   narrows instead of leaving a gap. */
+.photo-flow, .pr-flow { --gap: 5px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--gap); }
+.photo-flow.align-center, .pr-flow.align-center { justify-content: center; }
+.photo, .pr-fig {
+  width: min(calc(var(--w, 100) * 1% - var(--gap) * (1 - var(--w, 100) / 100)), calc(var(--cap-h) * var(--ar, 1000)));
+}
+.photo { --cap-h: calc(var(--cap-ratio, 100) * 100cqw); position: relative; margin: 0; line-height: 0; }
+.photo img {
+  display: block; width: 100%; height: auto; min-height: 40px;
+  max-height: var(--cap-h); object-fit: contain; object-position: left top;
+}
+.photo-flow.align-center img, .pr-flow.align-center img { object-position: center top; }
+.photo-cell[tabindex] .photo { cursor: grab; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .photo.dragging { opacity: 0.4; }
+.photo-ghost {
+  position: fixed; left: 0; top: 0; z-index: 45; width: 96px; height: auto; pointer-events: none;
+  border-radius: 4px; opacity: 0.9; box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+}
 .photo-edit, .photo-remove {
   position: absolute; display: inline-flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; border: 0; border-radius: 50%; background: rgba(255,255,255,0.92);
   box-shadow: 0 1px 3px rgba(0,0,0,0.3); color: var(--ink); line-height: 1;
 }
 .photo-edit { right: 6px; bottom: 6px; }
+.photo.selected { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 1; }
+.photo.selected .photo-edit, .photo.selected .photo-remove { right: 24px; opacity: 1; }
+.photo-handle { position: absolute; z-index: 2; width: 36px; height: 36px; touch-action: none; }
+.photo-handle::after {
+  content: ""; position: absolute; left: 11px; top: 11px; width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; border: 2px solid var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.photo-handle[data-corner=nw] { left: -18px; top: -18px; cursor: nwse-resize; }
+.photo-handle[data-corner=ne] { right: -18px; top: -18px; cursor: nesw-resize; }
+.photo-handle[data-corner=sw] { left: -18px; bottom: -18px; cursor: nesw-resize; }
+.photo-handle[data-corner=se] { right: -18px; bottom: -18px; cursor: nwse-resize; }
+.photo-size {
+  position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 10px;
+  background: rgba(20,24,32,0.72); color: #fff; font-size: 12px; font-weight: 600; line-height: 1.4; pointer-events: none;
+}
+.photo-cell-foot { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+.photo-cell-foot .photo-add { grid-column: 2; }
+.photo-cell-menu { grid-column: 3; justify-self: end; }
+.photo-menu { display: flex; flex-direction: column; gap: 6px; }
+.photo-menu .segmented button { min-width: 52px; min-height: 36px; }
 .photo-remove { right: 6px; top: 6px; opacity: 0; }
 .photo:hover .photo-remove, .photo:focus-within .photo-remove { opacity: 1; }
 @media (hover: none) { .photo-remove { opacity: 1; } }
@@ -811,7 +938,7 @@ body.is-sorting { cursor: grabbing; user-select: none; }
 }
 .photo-empty:hover { background: #f7f9fc; border-color: var(--line-strong); }
 .photo-add { border: 0; background: none; color: var(--accent); padding: 8px; font-size: 13px; min-height: 36px; }
-.gen-body .photo-cell { border: 1px dashed var(--line-strong); border-radius: 6px; overflow: hidden; }
+.gen-body .photo-cell { border: 1px dashed var(--line-strong); border-radius: 6px; }
 .gen-body .photo-cell .photo-empty { min-height: 54px; }
 
 /* ==== SECTION: css — reminders ==== */
@@ -931,7 +1058,7 @@ body.drop-file::after {
   .card { padding: 14px 12px; }
   .header-grid { grid-template-columns: 1fr; }
   .icon-btn, .drag-handle { width: var(--tap); height: var(--tap); }
-  .menu-item, .btn { min-height: var(--tap); }
+  .menu-item, .btn, .photo-menu .segmented button { min-height: var(--tap); }
   .obs-table, .obs-table tbody, .obs-table tr, .obs-table td { display: block; width: 100%; }
   .obs-table colgroup, .obs-table thead { display: none; }
   .obs-table tr { border: 1px solid var(--line-strong); border-radius: 8px; margin-bottom: 14px; overflow: hidden; background: #fff; }
@@ -987,7 +1114,7 @@ body.drop-file::after {
 .pr-general ol { margin: 0; padding-left: 36pt; }
 .pr-general li { margin: 0 0 3pt; padding-left: 4pt; }
 .pr-general li p { margin: 0; white-space: pre-wrap; }
-.pr-general img { display: block; max-width: 100%; max-height: 4.2in; margin: 8pt auto 4pt; }
+.pr-general .pr-flow { margin: 8pt 0 4pt; }
 .pr-table { break-before: page; margin-left: 5pt; width: calc(100% - 6pt); border-collapse: collapse; table-layout: fixed; font-size: 9pt; }
 .pr-table th, .pr-table td { border: 1pt solid #000; padding: 3pt 4pt 4pt; vertical-align: top; text-align: left; }
 .pr-table th { font-size: 10pt; line-height: 1.1; padding-bottom: 8pt; }
@@ -996,7 +1123,8 @@ body.drop-file::after {
 .pr-table td { white-space: pre-wrap; }
 .pr-table td.pr-item { font-size: 10pt; white-space: normal; }
 .pr-table td.pr-photo { padding: 5px; white-space: normal; }
-.pr-photo img { display: block; width: 100%; height: auto; } .pr-photo img + img { margin-top: 5px; }
+.pr-fig { --cap-h: var(--cap); line-height: 0; break-inside: avoid; }
+.pr-fig img { display: block; width: 100%; height: auto; max-height: var(--cap-h); object-fit: contain; object-position: left top; }
 .pr-pills { display: flex; flex-direction: column; align-items: flex-start; gap: 2pt; margin-top: 3pt; }
 .pr-pill { display: inline-block; padding: 0.5pt 4pt; border-radius: 6pt; font-size: 6.5pt; line-height: 1.3; background: #eee; white-space: nowrap; }
 .pr-pill.complete { background: var(--pill-complete-bg); color: var(--pill-complete-ink); }
@@ -1218,6 +1346,7 @@ const state = {
   autosaveWarned: false,
   pendingPhotoTarget: null,
   hoverPhotoTarget: null,
+  selectedPhotoId: null,
 };
 
 function emit(name, detail = {}) {
@@ -1235,8 +1364,9 @@ function markDirty() {
   emit('report:changed', { dirty: true });
 }
 
-function checkpoint() {
-  state.history.record(snapshotReport(state.report));
+// Pass a snapshot taken earlier to record the state from before a change.
+function checkpoint(snapshot = snapshotReport(state.report)) {
+  state.history.record(snapshot);
   state.editKey = null;
 }
 
@@ -2070,7 +2200,7 @@ function initColumnResize(table) {
       const up = () => {
         grip.removeEventListener('pointermove', move);
         grip.classList.remove('active');
-        if (widths !== start) { state.report.ui.columnWidths = widths; markDirty(); }
+        if (widths !== start) { state.report.ui.columnWidths = widths; markDirty(); updatePhotoCaps(); }
       };
       grip.addEventListener('pointermove', move);
       grip.addEventListener('pointerup', up, { once: true });
@@ -2079,6 +2209,7 @@ function initColumnResize(table) {
       state.report.ui.columnWidths = DEFAULT_COLUMN_WIDTHS.slice();
       apply(state.report.ui.columnWidths);
       markDirty();
+      updatePhotoCaps();
     });
   });
 }
@@ -2142,33 +2273,70 @@ async function addPhotosTo(target, files, beforeId = null) {
   }
 }
 
+function photoCellDisplay(target) {
+  const [kind, id] = target.split(':');
+  const r = state.report;
+  const item = kind === 'gen' ? r.generalObservations.find((g) => g.id === id) : findObservation(id);
+  return item ? item.display : {};
+}
+
+// Screen max height as a multiple of the cell width: the print cap over the print cell width.
+function photoCapRatio(kind) {
+  const r = state.report;
+  return photoMaxHeightIn(r.config, kind) / printPhotoCellWidthIn(r, kind);
+}
+
+function updatePhotoCaps() {
+  for (const cell of $$('.photo-cell[data-target]')) {
+    cell.style.setProperty('--cap-ratio', photoCapRatio(cell.dataset.target.split(':')[0]));
+  }
+}
+
 function photoCell(target, ids, { readOnly = false, compact = false } = {}) {
+  const kind = target.split(':')[0];
+  const layout = photoLayout(state.report, kind, photoCellDisplay(target), ids);
   const cell = h('div', {
     class: 'photo-cell' + (compact ? ' compact' : ''), dataset: { target },
     tabindex: readOnly ? null : '0', 'aria-label': readOnly ? null : 'Photos. Drop, paste or click to add.',
   });
-  for (const id of ids) {
-    const photo = state.report.photos[id];
-    if (photo) cell.append(photoFigure(photo, readOnly));
+  cell.style.setProperty('--cap-ratio', photoCapRatio(kind));
+  if (layout.photos.length) {
+    cell.append(h('div', { class: 'photo-flow' + (layout.align === 'center' ? ' align-center' : '') },
+      layout.photos.map(({ id, width }) => photoFigure(state.report.photos[id], readOnly, width))));
   }
   if (!readOnly) {
     cell.append(ids.length
-      ? h('button', { type: 'button', class: 'photo-add', dataset: { pick: target } }, '+ Add photo')
+      ? h('div', { class: 'photo-cell-foot' },
+        h('button', { type: 'button', class: 'photo-add', dataset: { pick: target } }, '+ Add photo'),
+        h('button', {
+          type: 'button', class: 'icon-btn photo-cell-menu hover-control', title: 'Photo size and alignment',
+          'aria-label': 'Photo size and alignment', dataset: { cellMenu: target },
+        }, icon('more')))
       : h('div', { class: 'photo-empty', dataset: { pick: target } }, icon('image'), h('span', null, 'Drop, paste or click to add photo')));
   }
   return cell;
 }
 
-function photoFigure(photo, readOnly) {
+function photoFigure(photo, readOnly, width = 100) {
   const img = h('img', { alt: photo.caption || photo.fileName || 'Photo', draggable: false });
   setPhotoImage(img, photo);
-  const fig = h('figure', { class: 'photo', dataset: { photoId: photo.id }, draggable: !readOnly }, img);
+  const fig = h('figure', { class: 'photo', dataset: { photoId: photo.id } }, img);
+  fig.style.setProperty('--w', width);
+  trackAspect(img, fig);
+  if (!readOnly && state.selectedPhotoId === photo.id) setPhotoSelected(fig, true);
   if (!readOnly) {
     fig.append(
       h('button', { type: 'button', class: 'photo-edit', title: 'Edit photo', 'aria-label': 'Edit photo', dataset: { edit: photo.id } }, icon('pencil')),
       h('button', { type: 'button', class: 'photo-remove', title: 'Remove photo', 'aria-label': 'Remove photo', dataset: { remove: photo.id } }, icon('close')));
   }
   return fig;
+}
+
+// Keep --ar (width / height) on fig in step with the image, for the height cap.
+function trackAspect(img, fig) {
+  img.addEventListener('load', () => {
+    if (img.naturalHeight) fig.style.setProperty('--ar', img.naturalWidth / img.naturalHeight);
+  });
 }
 
 function setPhotoImage(img, photo) {
@@ -2183,10 +2351,11 @@ function refreshPhotoCell(target) {
   if (cell && list) cell.replaceWith(photoCell(target, list, { compact: cell.classList.contains('compact') }));
 }
 
-function dropBeforeId(cell, clientY) {
-  const fig = $$('.photo', cell).find((f) => {
+// Insertion point in a photo flow: the first photo (in reading order) the point is before.
+function dropBeforeId(cell, x, y, skipId = null) {
+  const fig = $$('.photo', cell).filter((f) => f.dataset.photoId !== skipId).find((f) => {
     const r = f.getBoundingClientRect();
-    return clientY < r.top + r.height / 2;
+    return y < r.top || (y < r.bottom && x < r.left + r.width / 2);
   });
   return fig ? fig.dataset.photoId : null;
 }
@@ -2196,6 +2365,8 @@ function bindPhotoEvents() {
   page.addEventListener('click', (e) => {
     const edit = e.target.closest('[data-edit]');
     if (edit) return openPhotoEditor(edit.dataset.edit);
+    const menu = e.target.closest('[data-cell-menu]');
+    if (menu) return showPhotoCellMenu(menu, menu.dataset.cellMenu);
     const remove = e.target.closest('[data-remove]');
     if (remove) {
       const target = remove.closest('.photo-cell').dataset.target;
@@ -2222,25 +2393,13 @@ function bindPhotoEvents() {
     const cell = e.target.closest('.photo-cell[tabindex]');
     state.hoverPhotoTarget = cell ? cell.dataset.target : null;
   });
-  page.addEventListener('dragstart', (e) => {
-    const fig = e.target.closest('.photo[draggable=true]');
-    if (!fig) return;
-    const from = fig.closest('.photo-cell').dataset.target;
-    e.dataTransfer.setData('application/x-wm-photo', JSON.stringify({ photoId: fig.dataset.photoId, from }));
-    e.dataTransfer.effectAllowed = 'move';
-    fig.classList.add('dragging');
-  });
-  page.addEventListener('dragend', (e) => {
-    const fig = e.target.closest('.photo');
-    if (fig) fig.classList.remove('dragging');
-  });
+  // Image files dropped from the desktop (photos themselves move by pointer drag).
   page.addEventListener('dragover', (e) => {
     const cell = e.target.closest('.photo-cell[tabindex]');
-    const types = e.dataTransfer.types;
-    if (!cell || !(types.includes('Files') || types.includes('application/x-wm-photo'))) return;
+    if (!cell || !e.dataTransfer.types.includes('Files')) return;
     e.preventDefault();
     e.stopPropagation();
-    e.dataTransfer.dropEffect = types.includes('Files') ? 'copy' : 'move';
+    e.dataTransfer.dropEffect = 'copy';
     $$('.photo-cell.drag-over').forEach((c) => c !== cell && c.classList.remove('drag-over'));
     cell.classList.add('drag-over');
   });
@@ -2254,23 +2413,8 @@ function bindPhotoEvents() {
     e.preventDefault();
     e.stopPropagation();
     cell.classList.remove('drag-over');
-    const target = cell.dataset.target;
-    const beforeId = dropBeforeId(cell, e.clientY);
-    const moved = e.dataTransfer.getData('application/x-wm-photo');
-    if (moved) {
-      const { photoId, from } = JSON.parse(moved);
-      const src = photoList(from);
-      const dest = photoList(target);
-      if (!src || !dest || photoId === beforeId) return;
-      checkpoint();
-      src.splice(src.indexOf(photoId), 1);
-      const at = beforeId ? dest.indexOf(beforeId) : -1;
-      if (at < 0) dest.push(photoId); else dest.splice(at, 0, photoId);
-      markDirty();
-      refreshPhotoCell(from);
-      if (from !== target) refreshPhotoCell(target);
-    } else if (e.dataTransfer.files.length) {
-      addPhotosTo(target, e.dataTransfer.files, beforeId);
+    if (e.dataTransfer.files.length) {
+      addPhotosTo(cell.dataset.target, e.dataTransfer.files, dropBeforeId(cell, e.clientX, e.clientY));
     }
   });
   document.addEventListener('paste', (e) => {
@@ -2287,6 +2431,274 @@ function bindPhotoEvents() {
     const photo = state.report.photos[photoId];
     if (photo) $$(`.photo[data-photo-id="${photoId}"] img`).forEach((img) => setPhotoImage(img, photo));
   });
+}
+
+/* ==== SECTION: app — photos: pointer drag ==== */
+
+// One pointer-events drag for mouse, touch and pen. Mouse: drag after a small
+// move. Touch/pen: long-press to pick up; moving first scrolls the page.
+const PHOTO_LONG_PRESS_MS = 400;
+const PHOTO_TOUCH_SLOP = 8;
+const PHOTO_MOUSE_SLOP = 5;
+const PHOTO_AUTOSCROLL_EDGE = 80;
+
+// Current gesture: { pointerId, pointerType, fig, from, photoId, startX, startY,
+// x, y, active, timer, raf, ghost, cell, beforeId }, or null.
+let photoDrag = null;
+
+function bindPhotoDrag() {
+  const page = $('.page');
+  page.addEventListener('pointerdown', (e) => {
+    if (photoDrag || e.button > 0 || !e.isPrimary) return;
+    const fig = e.target.closest('.photo');
+    const cell = fig && fig.closest('.photo-cell[tabindex]');
+    if (!cell || e.target.closest('button, .photo-handle')) return;
+    photoDrag = {
+      pointerId: e.pointerId, pointerType: e.pointerType, fig, from: cell.dataset.target, photoId: fig.dataset.photoId,
+      startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, active: false, timer: null,
+    };
+    if (e.pointerType === 'mouse') e.preventDefault();
+    else photoDrag.timer = setTimeout(startPhotoDrag, PHOTO_LONG_PRESS_MS);
+    document.addEventListener('pointermove', photoPointerMove);
+    document.addEventListener('pointerup', photoPointerUp);
+    document.addEventListener('pointercancel', endPhotoGesture);
+  });
+  // Once a touch drag is active, keep the page from scrolling under it.
+  document.addEventListener('touchmove', (e) => { if (photoDrag && photoDrag.active) e.preventDefault(); }, { passive: false });
+  // A long-press would otherwise open the image context menu.
+  page.addEventListener('contextmenu', (e) => { if (photoDrag && e.target.closest('.photo')) e.preventDefault(); });
+}
+
+function photoPointerMove(e) {
+  const d = photoDrag;
+  if (!d || e.pointerId !== d.pointerId) return;
+  d.x = e.clientX;
+  d.y = e.clientY;
+  if (d.active) {
+    e.preventDefault();
+    updatePhotoDrag();
+    return;
+  }
+  const moved = Math.hypot(d.x - d.startX, d.y - d.startY);
+  if (d.pointerType === 'mouse') { if (moved > PHOTO_MOUSE_SLOP) startPhotoDrag(); }
+  else if (moved > PHOTO_TOUCH_SLOP) endPhotoGesture();
+}
+
+function startPhotoDrag() {
+  const d = photoDrag;
+  if (!d || d.active) return;
+  clearTimeout(d.timer);
+  if (!d.fig.isConnected) { endPhotoGesture(); return; }
+  d.active = true;
+  try {
+    d.fig.setPointerCapture(d.pointerId);
+  } catch (err) {
+    // Silent: the pointer is already gone; pointerup/cancel ends the gesture.
+  }
+  d.fig.classList.add('dragging');
+  document.body.classList.add('is-sorting');
+  const img = $('img', d.fig);
+  d.ghost = h('img', { class: 'photo-ghost', src: img.currentSrc || img.src, alt: '' });
+  document.body.append(d.ghost);
+  if (d.pointerType !== 'mouse' && navigator.vibrate) navigator.vibrate(15);
+  document.addEventListener('keydown', photoDragKeydown, true);
+  d.raf = requestAnimationFrame(autoScrollPhotoDrag);
+  updatePhotoDrag();
+}
+
+function updatePhotoDrag() {
+  const d = photoDrag;
+  d.ghost.style.transform = `translate(${d.x}px, ${d.y}px) translate(-50%, calc(-100% - 12px))`;
+  const el = document.elementFromPoint(d.x, d.y);
+  const cell = el && el.closest('.photo-cell[tabindex]');
+  if (d.cell && d.cell !== cell) d.cell.classList.remove('drag-over');
+  d.cell = cell;
+  if (!cell) { hidePhotoDropIndicator(); return; }
+  cell.classList.add('drag-over');
+  d.beforeId = dropBeforeId(cell, d.x, d.y, d.photoId);
+  showPhotoDropIndicator(cell, d.beforeId, d.photoId);
+}
+
+// A vertical bar on the left edge of `beforeId` (right edge of the last photo when null).
+function showPhotoDropIndicator(cell, beforeId, skipId) {
+  const figs = $$('.photo', cell).filter((f) => f.dataset.photoId !== skipId);
+  let box;
+  if (!figs.length) {
+    const r = cell.getBoundingClientRect();
+    box = { left: r.left + 8, top: r.top + 8, width: r.width - 16, height: 3 };
+  } else {
+    const fig = beforeId ? figs.find((f) => f.dataset.photoId === beforeId) : figs[figs.length - 1];
+    const r = fig.getBoundingClientRect();
+    box = { left: (beforeId ? r.left : r.right) - 2, top: r.top - 4, width: 4, height: r.height + 8 };
+  }
+  Object.assign($('#drop-indicator').style, {
+    display: 'block', left: box.left + 'px', top: box.top + 'px', width: box.width + 'px', height: box.height + 'px',
+  });
+}
+
+function hidePhotoDropIndicator() {
+  Object.assign($('#drop-indicator').style, { display: 'none', height: '' });
+}
+
+function autoScrollPhotoDrag() {
+  const d = photoDrag;
+  if (!d || !d.active) return;
+  const edge = PHOTO_AUTOSCROLL_EDGE;
+  let dy = 0;
+  if (d.y < edge) dy = -Math.ceil((edge - d.y) / 5);
+  else if (d.y > innerHeight - edge) dy = Math.ceil((d.y - innerHeight + edge) / 5);
+  if (dy) { scrollBy(0, dy); updatePhotoDrag(); }
+  d.raf = requestAnimationFrame(autoScrollPhotoDrag);
+}
+
+function photoDragKeydown(e) {
+  if (e.key !== 'Escape') return;
+  e.preventDefault();
+  e.stopPropagation();
+  endPhotoGesture();
+}
+
+function photoPointerUp(e) {
+  const d = photoDrag;
+  if (!d || e.pointerId !== d.pointerId) return;
+  endPhotoGesture();
+  if (!d.active) selectPhoto(d.photoId);
+  else if (d.cell) dropPhoto(d.from, d.cell.dataset.target, d.photoId, d.beforeId);
+}
+
+// Ends the gesture without changes (also Escape, pointercancel, or a scroll).
+function endPhotoGesture() {
+  const d = photoDrag;
+  if (!d) return;
+  photoDrag = null;
+  clearTimeout(d.timer);
+  cancelAnimationFrame(d.raf);
+  document.removeEventListener('pointermove', photoPointerMove);
+  document.removeEventListener('pointerup', photoPointerUp);
+  document.removeEventListener('pointercancel', endPhotoGesture);
+  document.removeEventListener('keydown', photoDragKeydown, true);
+  if (d.ghost) d.ghost.remove();
+  if (d.cell) d.cell.classList.remove('drag-over');
+  d.fig.classList.remove('dragging');
+  document.body.classList.remove('is-sorting');
+  hidePhotoDropIndicator();
+}
+
+function dropPhoto(from, to, photoId, beforeId) {
+  const src = photoList(from);
+  const dest = photoList(to);
+  if (!src || !dest) return;
+  const before = snapshotReport(state.report);
+  if (!movePhoto(src, dest, photoId, beforeId)) return;
+  checkpoint(before);
+  markDirty();
+  refreshPhotoCell(from);
+  if (to !== from) refreshPhotoCell(to);
+}
+
+/* ==== SECTION: app — photos: selection, resize and cell menu ==== */
+
+const PHOTO_CORNERS = ['nw', 'ne', 'sw', 'se'];
+
+// Select one photo (null clears): outline, corner handles and its width.
+function selectPhoto(id) {
+  state.selectedPhotoId = id;
+  for (const fig of $$('.photo-cell[tabindex] .photo')) setPhotoSelected(fig, fig.dataset.photoId === id);
+}
+
+function setPhotoSelected(fig, on) {
+  fig.classList.toggle('selected', on);
+  $$('.photo-handle, .photo-size', fig).forEach((el) => el.remove());
+  if (!on) return;
+  fig.append(
+    ...PHOTO_CORNERS.map((corner) => h('span', { class: 'photo-handle', dataset: { corner }, 'aria-hidden': 'true' })),
+    h('span', { class: 'photo-size' }, fig.style.getPropertyValue('--w') + '%'));
+}
+
+function bindPhotoResize() {
+  // Tapping or clicking anywhere else clears the selection.
+  document.addEventListener('pointerdown', (e) => {
+    if (state.selectedPhotoId && !e.target.closest('.photo.selected')) selectPhoto(null);
+  }, true);
+  $('.page').addEventListener('pointerdown', (e) => {
+    const handle = e.target.closest('.photo-handle');
+    if (handle && e.button <= 0) startPhotoResize(e, handle);
+  });
+}
+
+// Drag a corner: width follows the pointer (both edges move when centered),
+// snaps via snapPhotoWidth(), and is saved as the photo's override on release.
+function startPhotoResize(e, handle) {
+  e.preventDefault();
+  e.stopPropagation();
+  const fig = handle.closest('.photo');
+  const flow = fig.parentElement;
+  const target = fig.closest('.photo-cell').dataset.target;
+  const photo = state.report.photos[fig.dataset.photoId];
+  const gap = parseFloat(getComputedStyle(flow).columnGap) || 0;
+  const flowWidth = flow.clientWidth;
+  const startPct = Number(fig.style.getPropertyValue('--w')) || 100;
+  const startWidth = (startPct / 100) * (flowWidth + gap) - gap;
+  const sign = handle.dataset.corner.endsWith('e') ? 1 : -1;
+  const factor = flow.classList.contains('align-center') ? 2 : 1;
+  const label = $('.photo-size', fig);
+  let pct = startPct;
+  handle.setPointerCapture(e.pointerId);
+  const show = (value) => { fig.style.setProperty('--w', value); if (label) label.textContent = value + '%'; };
+  const move = (ev) => {
+    const width = startWidth + sign * factor * (ev.clientX - e.clientX);
+    pct = snapPhotoWidth(((width + gap) / (flowWidth + gap)) * 100);
+    show(pct);
+  };
+  const end = (commit) => {
+    handle.removeEventListener('pointermove', move);
+    handle.removeEventListener('pointerup', up);
+    handle.removeEventListener('pointercancel', cancel);
+    if (!commit || pct === startPct) { show(startPct); return; }
+    checkpoint();
+    photo.display = { ...photo.display, width: pct };
+    markDirty();
+    refreshPhotoCell(target);
+  };
+  const up = () => end(true);
+  const cancel = () => end(false);
+  handle.addEventListener('pointermove', move);
+  handle.addEventListener('pointerup', up);
+  handle.addEventListener('pointercancel', cancel);
+}
+
+// Cell ⋯ menu: default width and alignment, and reset of per-photo widths.
+function showPhotoCellMenu(anchor, target) {
+  const r = state.report;
+  const kind = target.split(':')[0];
+  const display = photoCellDisplay(target);
+  const cell = cellDisplay(display, kind);
+  const overridden = photoList(target).filter((id) => r.photos[id] && validPhotoWidth(r.photos[id].display.width));
+  const apply = (change) => {
+    checkpoint();
+    change();
+    markDirty();
+    refreshPhotoCell(target);
+    const next = $(`.photo-cell[data-target="${target}"] [data-cell-menu]`);
+    if (next) showPhotoCellMenu(next, target); else closePopover();
+  };
+  const choice = (label, options, current, onPick) => [
+    h('div', { class: 'field-label' }, label),
+    h('div', { class: 'segmented', role: 'group', 'aria-label': label }, options.map(([value, text]) => h('button', {
+      type: 'button', 'aria-pressed': String(value === current),
+      onclick: () => { if (value !== current) apply(() => onPick(value)); },
+    }, text))),
+  ];
+  showPopover(anchor, h('div', { class: 'photo-menu' },
+    choice('Default photo width', PHOTO_WIDTH_STEPS.map((w) => [w, w + '%']), cell.photoWidth,
+      (w) => { display.photoWidth = w; }),
+    choice('Alignment', [['left', 'Left'], ['center', 'Center']], cell.photoAlign,
+      (a) => { display.photoAlign = a; }),
+    h('hr'),
+    h('button', {
+      type: 'button', class: 'menu-item', disabled: !overridden.length,
+      onclick: () => apply(() => overridden.forEach((id) => { delete r.photos[id].display.width; })),
+    }, 'Reset photos to cell default')));
 }
 
 /* ==== SECTION: app — photos: flatten and markup drawing ==== */
@@ -3311,6 +3723,22 @@ function printPill(text, cls, bg) {
   return h('span', { class: 'pr-pill ' + (cls || ''), style: bg ? { background: bg } : null }, text);
 }
 
+function printPhotoFlow(kind, display, ids, urlFor) {
+  const layout = photoLayout(state.report, kind, display, ids);
+  if (!layout.photos.length) return null;
+  const flow = h('div', { class: 'pr-flow' + (layout.align === 'center' ? ' align-center' : '') },
+    layout.photos.map(({ id, width }) => {
+      const img = h('img', { alt: '' });
+      const fig = h('span', { class: 'pr-fig' }, img);
+      fig.style.setProperty('--w', width);
+      trackAspect(img, fig);
+      img.src = urlFor(id);
+      return fig;
+    }));
+  flow.style.setProperty('--cap', layout.maxHeightIn + 'in');
+  return flow;
+}
+
 function printItemPills(item, { status = true } = {}) {
   const r = state.report;
   const pills = [];
@@ -3352,7 +3780,7 @@ function renderPrint(urlFor) {
         h('h2', null, 'General Observations/Comments'),
         r.generalObservations.length ? h('ol', null, r.generalObservations.map((g) => h('li', null,
           h('p', null, g.text),
-          g.images.filter((id) => r.photos[id]).map((id) => h('img', { src: urlFor(id), alt: '' })))))
+          printPhotoFlow('gen', g.display, g.images, urlFor))))
           : null)),
     r.observations.length ? h('table', { class: 'pr-table' },
       h('colgroup', null, printColumnWidths(r).map((w) => h('col', { style: { width: w + '%' } }))),
@@ -3360,7 +3788,7 @@ function renderPrint(urlFor) {
       h('tbody', null, r.observations.map((o) => h('tr', null,
         h('td', { class: 'pr-item' }, o.number, printItemPills(o)),
         h('td', null, o.description),
-        h('td', { class: 'pr-photo' }, o.photoIds.filter((id) => r.photos[id]).map((id) => h('img', { src: urlFor(id), alt: '' }))),
+        h('td', { class: 'pr-photo' }, printPhotoFlow('obs', o.display, o.photoIds, urlFor)),
         h('td', null, o.requirement))))) : null,
     remindersVisible() && c.pdfShowReminders ? h('section', { class: 'pr-reminders' },
       h('h2', null, 'Open Items from Previous Reports'),
@@ -3581,6 +4009,7 @@ function renderConfigPanel() {
   const panel = $('#config-panel');
   const section = (title, ...kids) => h('div', { class: 'config-section' }, h('h3', null, title), kids);
   const pct = (v) => Math.round(v * 100) + '%';
+  const inches = (v) => Number(v).toFixed(1) + ' in';
   panel.replaceChildren(
     h('div', { class: 'config-head' },
       h('h2', null, 'Settings'),
@@ -3595,7 +4024,9 @@ function renderConfigPanel() {
       configToggle('Show scope tags', 'pdfShowTags'),
       configToggle('Show Reminders section', 'pdfShowReminders'),
       configRange('Photo export size (longest side)', 'photoExportMaxSide', { min: 400, max: 1200, step: 50, format: (v) => v + ' px' }),
-      configRange('Photo export JPEG quality', 'photoExportQuality', { min: 0.5, max: 0.95, step: 0.05, format: pct })),
+      configRange('Photo export JPEG quality', 'photoExportQuality', { min: 0.5, max: 0.95, step: 0.05, format: pct }),
+      configRange('Table photo max height', 'photoMaxHeightTable', { min: 1, max: 6, step: 0.1, format: inches }),
+      configRange('General Observations image max height', 'photoMaxHeightGeneral', { min: 1, max: 6, step: 0.1, format: inches })),
     section('Markup',
       h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Default markup color'),
         h('div', { class: 'swatches' }, MARKUP_COLORS.map((m) => h('button', {
@@ -3661,7 +4092,7 @@ function bindGlobalEvents() {
     else if (mod && key === 'p') { e.preventDefault(); exportPDF(); }
     else if (mod && key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
     else if (mod && (key === 'y' || (key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
-    else if (key === 'escape') { closePopover(); closeConfig(); }
+    else if (key === 'escape') { closePopover(); closeConfig(); selectPhoto(null); }
     return undefined;
   });
   document.addEventListener('keyup', (e) => { if (editorIsOpen()) editorKeyup(e); });
@@ -3714,6 +4145,7 @@ function bindGlobalEvents() {
     if (key === 'carryForward' || key === '*') { renderObservations(); renderReminders(); }
     if (key === 'disclaimer' || key === '*') renderHeader();
     if (key === 'autosaveSeconds' || key === '*') restartAutosaveTimer();
+    if (/^(photoMaxHeight|pdfUseScreenWidths$)/.test(key) || key === '*') updatePhotoCaps();
   });
 }
 
@@ -3730,6 +4162,8 @@ function init() {
   buildEditorToolbar();
   bindGlobalEvents();
   bindPhotoEvents();
+  bindPhotoDrag();
+  bindPhotoResize();
   bindPrintEvents();
   loadReport(createReport());
   showEnvironmentNotice();

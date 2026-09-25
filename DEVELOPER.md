@@ -9,46 +9,49 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 
 | Section | Lines |
 | --- | --- |
-| core — config defaults | 14–72 |
-| core — utilities | 73–126 |
-| core — report model | 127–197 |
-| core — numbering | 198–220 |
-| core — inheritance | 221–270 |
-| core — tags and filters | 271–299 |
-| core — undo history | 300–341 |
-| core — file formats | 342–456 |
-| core — messages and debug log | 457–603 |
-| css — tokens and base | 604–655 |
-| css — toolbar and page | 656–688 |
-| css — header form | 689–720 |
-| css — general observations | 721–733 |
-| css — observation table | 734–790 |
-| css — photos | 791–816 |
-| css — reminders | 817–824 |
-| css — popovers, dialogs, panel | 825–888 |
-| css — photo editor | 889–921 |
-| css — responsive | 922–951 |
-| css — print | 952–1012 |
-| markup — shell | 1013–1051 |
-| app — dom helpers and icons | 1052–1202 |
-| app — state and events | 1203–1293 |
-| app — dialogs and popovers | 1294–1372 |
-| app — notify: messages and debug log | 1373–1445 |
-| app — render: toolbar and header | 1446–1639 |
-| app — render: general observations | 1640–1695 |
-| app — render: observations table | 1696–1904 |
-| app — render: filters and reminders | 1905–1996 |
-| app — sorting and column resize | 1997–2085 |
-| app — photos: import, cells, drag and drop | 2086–2291 |
-| app — photos: flatten and markup drawing | 2292–2479 |
-| app — photo editor | 2480–3019 |
-| app — persistence: files | 3020–3170 |
-| app — persistence: autosave (IndexedDB) | 3171–3259 |
-| app — export: CSV | 3260–3267 |
-| app — export: PDF (print) | 3268–3451 |
-| app — config panel | 3452–3636 |
-| app — office defaults (developer stub) | 3637–3651 |
-| app — keyboard, window events and init | 3652–3744 |
+| core — config defaults | 14–79 |
+| core — utilities | 80–133 |
+| core — report model | 134–204 |
+| core — numbering | 205–227 |
+| core — inheritance | 228–277 |
+| core — tags and filters | 278–306 |
+| core — photo display | 307–371 |
+| core — undo history | 372–422 |
+| core — file formats | 423–541 |
+| core — messages and debug log | 542–689 |
+| css — tokens and base | 690–741 |
+| css — toolbar and page | 742–774 |
+| css — header form | 775–806 |
+| css — general observations | 807–819 |
+| css — observation table | 820–876 |
+| css — photos | 877–943 |
+| css — reminders | 944–951 |
+| css — popovers, dialogs, panel | 952–1015 |
+| css — photo editor | 1016–1048 |
+| css — responsive | 1049–1078 |
+| css — print | 1079–1140 |
+| markup — shell | 1141–1179 |
+| app — dom helpers and icons | 1180–1330 |
+| app — state and events | 1331–1423 |
+| app — dialogs and popovers | 1424–1502 |
+| app — notify: messages and debug log | 1503–1575 |
+| app — render: toolbar and header | 1576–1769 |
+| app — render: general observations | 1770–1825 |
+| app — render: observations table | 1826–2034 |
+| app — render: filters and reminders | 2035–2126 |
+| app — sorting and column resize | 2127–2216 |
+| app — photos: import, cells, drag and drop | 2217–2435 |
+| app — photos: pointer drag | 2436–2598 |
+| app — photos: selection, resize and cell menu | 2599–2703 |
+| app — photos: flatten and markup drawing | 2704–2891 |
+| app — photo editor | 2892–3431 |
+| app — persistence: files | 3432–3582 |
+| app — persistence: autosave (IndexedDB) | 3583–3671 |
+| app — export: CSV | 3672–3679 |
+| app — export: PDF (print) | 3680–3879 |
+| app — config panel | 3880–4067 |
+| app — office defaults (developer stub) | 4068–4082 |
+| app — keyboard, window events and init | 4083–4178 |
 
 ## 2. Modules
 
@@ -75,7 +78,7 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | --- | --- |
 | `createReport(options = {}) → report` | New report; `options.config`, `options.tags`, `options.today`. |
 | `createObservation(report) → Observation` | Blank observation for the current report number. |
-| `createGeneralObservation() → object` | `{ id, text, images }`. |
+| `createGeneralObservation() → object` | `{ id, text, images, display }`. |
 | `createPhoto(dataUrl, fileName) → Photo` | Photo record with no crop or markup. |
 | `setStatus(item, status, date) → item` | Set complete (with date) or incomplete (clears date). |
 | `reportTitle(report) → string` | "Field Observation Report 01". |
@@ -105,13 +108,29 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `matchesFilter(item, filter) → boolean` | Screen filter test (`status`, any of `tagIds`). |
 | `printColumnWidths(report) → number[]` | PDF column widths (template or on-screen). |
 
+### core — photo display
+
+Cell `kind` is `obs` (table row) or `gen` (general observation), the prefix of
+a photo cell target (`obs:<id>`, `gen:<id>`).
+
+| Function | Description |
+| --- | --- |
+| `validPhotoWidth(value) → number\|null` | A number in 10–100 (rounded), else null. |
+| `snapPhotoWidth(pct) → number` | Clamp to 10–100; snap to `PHOTO_WIDTH_STEPS` within `PHOTO_WIDTH_SNAP` (4) %. |
+| `cellDisplay(display, kind) → { photoWidth, photoAlign }` | Cell defaults: 100 %, `left` (table) or `center` (general). |
+| `effectivePhotoWidth(photo, cell) → number` | `photo.display.width` if valid, else the cell's `photoWidth`. |
+| `photoMaxHeightIn(config, kind) → number` | `photoMaxHeightTable` / `photoMaxHeightGeneral`, clamped to 1–6 in. |
+| `printPhotoCellWidthIn(report, kind) → number` | Photo cell content width in the PDF (inches; mirrors css — print). |
+| `photoLayout(report, kind, display, ids) → { align, maxHeightIn, photos: [{ id, width }] }` | Layout of one photo cell, shared by screen and print. |
+| `movePhoto(src, dest, photoId, beforeId) → boolean` | Move an id between (or within) photo lists; false when nothing changed. |
+
 ### core — undo history
 
 | Function | Description |
 | --- | --- |
 | `History` | Class: `record(snapshot)`, `undo(current)`, `redo(current)`, `canUndo()`, `canRedo()`, `clear()`; limit `HISTORY_LIMIT` (100). |
-| `snapshotReport(report) → string` | JSON of `SNAPSHOT_KEYS` (excludes photos, config, ui). |
-| `restoreSnapshot(report, snapshot) → report` | Apply a snapshot in place and renumber. |
+| `snapshotReport(report) → string` | JSON of `SNAPSHOT_KEYS` plus `photoDisplay` (each photo's `display`); excludes photos, config, ui. |
+| `restoreSnapshot(report, snapshot) → report` | Apply a snapshot in place (including photo `display`) and renumber. |
 
 ### core — file formats
 
@@ -122,7 +141,7 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `serializeReport(report) → string` | Renumber, drop unreferenced photos, JSON. |
 | `migrate(data) → data` | Schema upgrade hook (no steps yet). |
 | `normalizeItem(item, report) → Observation` | Fill missing observation fields. |
-| `normalizeReport(data) → report` | Fill defaults for every report field. |
+| `normalizeReport(data) → report` | Fill defaults for every report field (empty `display` objects on older files). |
 | `parseReport(json) → report` | Validate `app`/`schemaVersion`, migrate, normalize. Throws user-facing errors. |
 | `csvField(value) → string` | RFC 4180 quoting. |
 | `toCSV(report) → string` | BOM + CRLF CSV, current items then inherited. |
@@ -163,7 +182,7 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `emit(name, detail = {})` | Dispatch a custom event on `document`. |
 | `on(name, handler)` | Listen for a custom event (handler gets `detail`). |
 | `markDirty()` | Flag unsaved changes; emits `report:changed`. |
-| `checkpoint()` | Record an undo snapshot before a structural change. |
+| `checkpoint(snapshot)` | Record an undo snapshot before a structural change (default: now; pass one taken earlier to record a pre-change state). |
 | `beginTextEdit(key)` | Record one undo snapshot per text field edit session. |
 | `endTextEdit()` | End the text edit session (focusout). |
 | `undo()` | Undo the last change and re-render. |
@@ -256,12 +275,50 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `importImageFile(file) → Promise<Photo>` | Downscale to 1600 px JPEG 0.85, add to `report.photos`. |
 | `photoList(target) → string[]` | Photo id array for `obs:<id>` or `gen:<id>`. |
 | `addPhotosTo(target, files, beforeId)` | Import image files into a cell. |
-| `photoCell(target, ids, { readOnly, compact }) → Element` | Photo stack with empty state. |
-| `photoFigure(photo, readOnly) → Element` | One photo with edit/remove buttons. |
+| `photoCellDisplay(target) → object` | The cell's `display` (observation or general observation). |
+| `photoCapRatio(kind) → number` | Screen max height as a multiple of the cell width: `photoMaxHeightIn()` ÷ `printPhotoCellWidthIn()`. |
+| `updatePhotoCaps()` | Refresh `--cap-ratio` on every photo cell (after cap, column width or template changes). |
+| `photoCell(target, ids, { readOnly, compact }) → Element` | Photo flow (`photoLayout()`: widths, alignment, cap) with add button or empty state. |
+| `photoFigure(photo, readOnly, width = 100) → Element` | One photo (`--w` = width %) with edit/remove buttons. |
+| `trackAspect(img, fig)` | Set `--ar` (width ÷ height) on `fig` whenever `img` loads, so capped photos narrow. |
 | `setPhotoImage(img, photo)` | Show original, then the flattened preview. |
 | `refreshPhotoCell(target)` | Re-render one photo cell. |
-| `dropBeforeId(cell, clientY) → string\|null` | Photo to insert before at a drop point. |
-| `bindPhotoEvents()` | Click, file input, drag/drop, paste, `photo:changed` listeners. |
+| `dropBeforeId(cell, x, y, skipId) → string\|null` | Photo to insert before at a point in the flow (reading order), ignoring `skipId`; null = end. |
+| `bindPhotoEvents()` | Click (edit, remove, add, cell ⋯ menu), file input, image file drop, paste, `photo:changed` listeners. |
+
+### app — photos: pointer drag
+
+One Pointer Events gesture for mouse, touch and pen (no HTML5 drag and drop for
+photos). Mouse: drag after `PHOTO_MOUSE_SLOP` px. Touch/pen: long-press
+`PHOTO_LONG_PRESS_MS` (400 ms) to pick up; moving more than
+`PHOTO_TOUCH_SLOP` px first is a scroll. While active, a non-passive
+`touchmove` listener stops page scrolling and the page auto-scrolls within
+`PHOTO_AUTOSCROLL_EDGE` px of the viewport edge. Gesture state lives in
+`photoDrag` (module variable).
+
+| Function | Description |
+| --- | --- |
+| `bindPhotoDrag()` | `pointerdown` on a photo (not its buttons) in an editable cell starts a gesture; blocks touch scroll and the long-press context menu while dragging. |
+| `photoPointerMove(e)` | Start the mouse drag, abandon a touch long-press that moved (scroll), or update an active drag. |
+| `startPhotoDrag()` | Pointer capture, `.dragging`, `.photo-ghost` image, short vibration on touch, Escape listener, auto-scroll loop. |
+| `updatePhotoDrag()` | Move the ghost; hit-test the cell under the pointer (`.drag-over`), compute `beforeId`, place the indicator. |
+| `showPhotoDropIndicator(cell, beforeId, skipId)` | `#drop-indicator` as a vertical bar on the edge of `beforeId` (after the last photo; a line in an empty cell). |
+| `hidePhotoDropIndicator()` | Hide `#drop-indicator` and reset its height. |
+| `autoScrollPhotoDrag()` | rAF loop: scroll near the top/bottom edge and re-hit-test. |
+| `photoDragKeydown(e)` | Escape cancels the drag. |
+| `photoPointerUp(e)` | End the gesture; a tap/click (no drag) selects the photo, a drag drops into the cell under the pointer, if any. |
+| `endPhotoGesture()` | Clean up without changes (Escape, `pointercancel`, scroll, drop outside a cell). |
+| `dropPhoto(from, to, photoId, beforeId)` | `movePhoto()` between cell targets; one undo step when something moved; refresh both cells. |
+
+### app — photos: selection, resize and cell menu
+
+| Function | Description |
+| --- | --- |
+| `selectPhoto(id)` | Set `state.selectedPhotoId` (null clears) and update every editable photo. |
+| `setPhotoSelected(fig, on)` | `.selected` outline, four `.photo-handle` corners (36 px targets) and the `.photo-size` width label. |
+| `bindPhotoResize()` | Clear the selection on any pointerdown outside it; start a resize from a handle. |
+| `startPhotoResize(e, handle)` | Corner drag: width follows the pointer (twice the move when centered), `snapPhotoWidth()`, live `--w` and label; on release one undo step writes `photo.display.width`; `pointercancel` reverts. |
+| `showPhotoCellMenu(anchor, target)` | Cell ⋯ popover: default width (25/50/75/100 %), alignment (left/center), "Reset photos to cell default" (clears overrides); each change is one undo step. |
 
 ### app — photos: flatten and markup drawing
 
@@ -357,6 +414,7 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `cssString(text) → string` | Quote text for CSS `content`. |
 | `updatePageStyle()` | Write `@page` rules (running header, page 1 footer) into `#print-page-style`. |
 | `printPhotoIds() → string[]` | Photos that appear in the PDF. |
+| `printPhotoFlow(kind, display, ids, urlFor) → Element\|null` | Print photo flow from `photoLayout()` (`--w`, `--cap` in inches, alignment). |
 | `printPill(text, cls, bg) → Element` | Print pill. |
 | `printItemPills(item, { status }) → Element\|null` | Status/tag pills per Config toggles. |
 | `renderPrint(urlFor)` | Build `#print-root` from the report. |
@@ -391,7 +449,7 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 
 | Function | Description |
 | --- | --- |
-| `bindGlobalEvents()` | Shortcuts, unload warning, autosave triggers, JSON drop, event listeners. |
+| `bindGlobalEvents()` | Shortcuts (Escape also clears the photo selection), unload warning, autosave triggers, JSON drop, event listeners. |
 | `init()` | Route `window` errors to `reportUncaught()`, `detectCapabilities()`, build UI, load a blank report, WebView notice, set `data-ready`, offer recovery. |
 
 ## 3. State
@@ -408,7 +466,7 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `header.visitDate`, `header.reportDate` | ISO date | today |
 | `header.attendees`, `header.distribution` | string[] | `[]` |
 | `disclaimer` | string | `config.disclaimer` |
-| `generalObservations[]` | `{ id, text, images: photoId[] }` | `[]` |
+| `generalObservations[]` | `{ id, text, images: photoId[], display }` | `[]` |
 | `observations[]` | Observation | `[]` |
 | `inherited[]` | Observation + `sourceReport`, `originalNumber` | `[]` |
 | `tags[]` | `{ id, name, color }` (color = `TAG_COLORS` key) | `[]` |
@@ -417,16 +475,23 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `ui.columnWidths` | number[4] (%) | `[8, 36, 32, 24]` |
 
 Observation: `id` (UUID), `number` (string), `description`, `requirement`,
-`photoIds[]`, `display` (`{}`), `status` (`incomplete`\|`complete`),
+`photoIds[]`, `display`, `status` (`incomplete`\|`complete`),
 `completedDate` (ISO\|null), `tagIds[]`, `createdInReport` (number).
 
+Cell `display` (observation and general observation; `{}` = defaults, see
+`cellDisplay()`): `photoWidth` (10–100 %, the menu offers 25/50/75/100;
+default 100), `photoAlign` (`left`\|`center`; default `left` in the table,
+`center` in general observations).
+
 Photo: `id`, `original` (JPEG data URL, ≤ 1600 px), `crop` (`{x, y, w, h}`
-original px \| null), `markup[]` (§9), `caption`, `fileName`.
+original px \| null), `markup[]` (§9), `caption`, `fileName`, `display`
+(`{ width }`: optional width override, 10–100 % of its cell; moves with the
+photo between cells).
 
 App-only `state`: `fileHandle`, `fileName`, `dirty`, `changeCount`,
 `autosavedCount`, `history`, `editKey`, `filter`, `autosaveTimer`,
 `printPrepared`, `printOpened`, `autosaveWarned`, `pendingPhotoTarget`,
-`hoverPhotoTarget`. Also app-only: `debugLog` (`DebugLog`) and `capabilities`
+`hoverPhotoTarget`, `selectedPhotoId`. Also app-only: `debugLog` (`DebugLog`) and `capabilities`
 (§12); neither is ever written to a file.
 
 ## 4. Config
@@ -442,6 +507,8 @@ App-only `state`: `fileHandle`, `fileName`, `dirty`, `changeCount`,
 | `pdfShowReminders` | boolean | `true` | `renderPrint()` |
 | `photoExportMaxSide` | number (400–1200) | `600` | `preparePrint()`, `bindPrintEvents()` |
 | `photoExportQuality` | number | `0.8` | `preparePrint()` |
+| `photoMaxHeightTable` | number (1–6 in) | `2` | `photoMaxHeightIn()` → `photoCell()`, `printPhotoFlow()` |
+| `photoMaxHeightGeneral` | number (1–6 in) | `4` | `photoMaxHeightIn()` → `photoCell()`, `printPhotoFlow()` |
 | `markupColor` | hex | `#F26A21` | `openPhotoEditor()` |
 | `disclaimer` | string | template text | `createReport()`, `renderDisclaimer()` |
 | `logo` | data URL \| null | `null` (= `DEFAULT_LOGO`) | `renderPrint()`, `logoEditor()` |
@@ -451,7 +518,9 @@ App-only `state`: `fileHandle`, `fileName`, `dirty`, `changeCount`,
 
 Other constants: `APP_ID`, `DEFAULTS_APP_ID`, `SCHEMA_VERSION`,
 `DEFAULT_COLUMN_WIDTHS`, `PDF_COLUMN_WIDTHS` (`[8, 38, 33, 21]`),
-`PHOTO_UPLOAD_MAX_SIDE`, `PHOTO_UPLOAD_QUALITY`, `HISTORY_LIMIT`,
+`PHOTO_UPLOAD_MAX_SIDE`, `PHOTO_UPLOAD_QUALITY`, `PHOTO_WIDTH_STEPS`,
+`PHOTO_WIDTH_MIN`, `PHOTO_WIDTH_SNAP`, `PHOTO_MAX_HEIGHT_RANGE`,
+`PRINT_CONTENT_WIDTH_IN`, `HISTORY_LIMIT`,
 `TAG_COLORS`, `NUMBERING_PRESETS`, `CSV_COLUMNS`, `SNAPSHOT_KEYS`,
 `MESSAGES`, `LOG_CODES`, `DEBUG_LOG_LIMIT`, `DEBUG_DETAIL_MAX`,
 `OPEN_IN_BROWSER_HELP`, `SEND_DEBUG_HELP`.
@@ -495,12 +564,12 @@ Dispatched on `document` by `emit()`; `detail` is the payload.
 | css — header form | `.header-grid`, `.field`, `.chips`, `.chip`, `.disclaimer` |
 | css — general observations | `.gen-list`, `.gen-item`, `.autogrow` |
 | css — observation table | `.obs-table`, `.col-resizer`, `.cell-text`, `.item-cell`, `.pill*`, `.drag-handle`, `.hover-control`, `.drop-indicator` |
-| css — photos | `.photo-cell`, `.photo`, `.photo-edit`, `.photo-remove`, `.photo-empty` |
+| css — photos | `.photo.selected`, `.photo-handle` (`data-corner`), `.photo-size`, `.photo-cell-foot`, `.photo-cell-menu`, `.photo-menu`, `.photo-ghost`, `.photo.dragging`, `.photo-cell.drag-over`, `.photo-cell` (container for `cqw`), `.photo-flow` / `.pr-flow` (`.align-center`), `.photo` / `.pr-fig` (vars `--w`, `--cap-h`, `--ar`), `.photo-edit`, `.photo-remove`, `.photo-empty` |
 | css — reminders | `.rem-group`, `.rem-table` |
 | css — popovers, dialogs, panel | `.popover`, `.menu-item`, `.swatch`, `.dlg`, `.config-panel`, `.toast`, `.busy` |
 | css — photo editor | `.pe`, `.pe-bar`, `.pe-btn`, `.pe-stage`, `.pe-text-input` |
 | css — responsive | `< 900px`: cards, icon toolbar, 44 px targets |
-| css — print | `#print-root`, `.pr`, `.pr-masthead`, `.pr-title`, `.pr-head`, `.pr-general`, `.pr-table`, `.pr-reminders` |
+| css — print | `#print-root`, `.pr`, `.pr-masthead`, `.pr-title`, `.pr-head`, `.pr-general`, `.pr-table`, `.pr-reminders`; photo flow rules live in css — photos |
 
 `@page` rules are generated at runtime into `<style id="print-page-style">`
 by `updatePageStyle()`: Letter, margins 1.55in 1in 0.8in 1in; `@top-left`
