@@ -44,14 +44,14 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 | app — photos: pointer drag | 2436–2598 |
 | app — photos: selection, resize and cell menu | 2599–2703 |
 | app — photos: flatten and markup drawing | 2704–2891 |
-| app — photo editor | 2892–3431 |
-| app — persistence: files | 3432–3582 |
-| app — persistence: autosave (IndexedDB) | 3583–3671 |
-| app — export: CSV | 3672–3679 |
-| app — export: PDF (print) | 3680–3879 |
-| app — config panel | 3880–4067 |
-| app — office defaults (developer stub) | 4068–4082 |
-| app — keyboard, window events and init | 4083–4178 |
+| app — photo editor | 2892–3435 |
+| app — persistence: files | 3436–3586 |
+| app — persistence: autosave (IndexedDB) | 3587–3675 |
+| app — export: CSV | 3676–3683 |
+| app — export: PDF (print) | 3684–3883 |
+| app — config panel | 3884–4071 |
+| app — office defaults (developer stub) | 4072–4086 |
+| app — keyboard, window events and init | 4087–4182 |
 
 ## 2. Modules
 

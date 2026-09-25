@@ -3230,6 +3230,10 @@ function newShape(tool, p) {
 
 function editorPointerDown(e) {
   const canvas = $('#pe-canvas');
+  // Canvas isn't focusable, so the browser's default mousedown action blurs
+  // whatever we just focused (e.g. the text-tool's textarea) right after this
+  // handler returns. Prevent that default action to keep the focus we set.
+  e.preventDefault();
   commitTextInput();
   canvas.setPointerCapture(e.pointerId);
   editor.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
