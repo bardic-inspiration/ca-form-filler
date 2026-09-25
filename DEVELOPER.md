@@ -15,43 +15,45 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 | core — numbering | 205–227 |
 | core — inheritance | 228–277 |
 | core — tags and filters | 278–306 |
-| core — photo display | 307–371 |
-| core — undo history | 372–422 |
-| core — file formats | 423–541 |
-| core — messages and debug log | 542–689 |
-| css — tokens and base | 690–741 |
-| css — toolbar and page | 742–774 |
-| css — header form | 775–806 |
-| css — general observations | 807–819 |
-| css — observation table | 820–876 |
-| css — photos | 877–943 |
-| css — reminders | 944–951 |
-| css — popovers, dialogs, panel | 952–1015 |
-| css — photo editor | 1016–1048 |
-| css — responsive | 1049–1078 |
-| css — print | 1079–1140 |
-| markup — shell | 1141–1179 |
-| app — dom helpers and icons | 1180–1330 |
-| app — state and events | 1331–1423 |
-| app — dialogs and popovers | 1424–1502 |
-| app — notify: messages and debug log | 1503–1575 |
-| app — render: toolbar and header | 1576–1769 |
-| app — render: general observations | 1770–1825 |
-| app — render: observations table | 1826–2034 |
-| app — render: filters and reminders | 2035–2126 |
-| app — sorting and column resize | 2127–2216 |
-| app — photos: import, cells, drag and drop | 2217–2435 |
-| app — photos: pointer drag | 2436–2598 |
-| app — photos: selection, resize and cell menu | 2599–2703 |
-| app — photos: flatten and markup drawing | 2704–2891 |
-| app — photo editor | 2892–3435 |
-| app — persistence: files | 3436–3586 |
-| app — persistence: autosave (IndexedDB) | 3587–3675 |
-| app — export: CSV | 3676–3683 |
-| app — export: PDF (print) | 3684–3883 |
-| app — config panel | 3884–4071 |
-| app — office defaults (developer stub) | 4072–4086 |
-| app — keyboard, window events and init | 4087–4182 |
+| core — photo display | 307–407 |
+| core — undo history | 408–467 |
+| core — file formats | 468–586 |
+| core — messages and debug log | 587–735 |
+| css — tokens and base | 736–787 |
+| css — toolbar and page | 788–820 |
+| css — header form | 821–852 |
+| css — general observations | 853–865 |
+| css — observation table | 866–922 |
+| css — photos | 923–998 |
+| css — reminders | 999–1006 |
+| css — popovers, dialogs, panel | 1007–1083 |
+| css — photo editor | 1084–1116 |
+| css — responsive | 1117–1146 |
+| css — print | 1147–1208 |
+| markup — shell | 1209–1248 |
+| app — dom helpers and icons | 1249–1399 |
+| app — state and events | 1400–1494 |
+| app — dialogs and popovers | 1495–1573 |
+| app — floating toolbar | 1574–1621 |
+| app — notify: messages and debug log | 1622–1694 |
+| app — render: toolbar and header | 1695–1888 |
+| app — render: general observations | 1889–1944 |
+| app — render: observations table | 1945–2153 |
+| app — render: filters and reminders | 2154–2245 |
+| app — sorting and column resize | 2246–2335 |
+| app — photos: import, cells, drag and drop | 2336–2541 |
+| app — photos: pointer drag | 2542–2704 |
+| app — photos: selection, resize and cell menu | 2705–2843 |
+| app — photos: in-cell crop and rotate | 2844–2970 |
+| app — photos: flatten and markup drawing | 2971–3173 |
+| app — photo editor | 3174–3706 |
+| app — persistence: files | 3707–3857 |
+| app — persistence: autosave (IndexedDB) | 3858–3946 |
+| app — export: CSV | 3947–3954 |
+| app — export: PDF (print) | 3955–4154 |
+| app — config panel | 4155–4342 |
+| app — office defaults (developer stub) | 4343–4357 |
+| app — keyboard, window events and init | 4358–4458 |
 
 ## 2. Modules
 
@@ -123,14 +125,17 @@ a photo cell target (`obs:<id>`, `gen:<id>`).
 | `printPhotoCellWidthIn(report, kind) → number` | Photo cell content width in the PDF (inches; mirrors css — print). |
 | `photoLayout(report, kind, display, ids) → { align, maxHeightIn, photos: [{ id, width }] }` | Layout of one photo cell, shared by screen and print. |
 | `movePhoto(src, dest, photoId, beforeId) → boolean` | Move an id between (or within) photo lists; false when nothing changed. |
+| `rotateCrop90(crop, height) → crop\|null` | Crop `{x, y, w, h}` turned 90° clockwise with a photo of the given (pre-rotation) height. |
+| `resizeCrop(start, edge, dx, dy, W, H, min) → crop` | Drag a crop: `edge` is `move` or a mix of `n`/`s`/`e`/`w`; stays inside W × H, each side ≥ `min`. |
+| `normalizeCrop(crop, W, H) → crop\|null` | Whole px inside the photo; null when it covers the whole photo. |
 
 ### core — undo history
 
 | Function | Description |
 | --- | --- |
 | `History` | Class: `record(snapshot)`, `undo(current)`, `redo(current)`, `canUndo()`, `canRedo()`, `clear()`; limit `HISTORY_LIMIT` (100). |
-| `snapshotReport(report) → string` | JSON of `SNAPSHOT_KEYS` plus `photoDisplay` (each photo's `display`); excludes photos, config, ui. |
-| `restoreSnapshot(report, snapshot) → report` | Apply a snapshot in place (including photo `display`) and renumber. |
+| `snapshotReport(report) → { json, originals }` | JSON of `SNAPSHOT_KEYS`, `photoDisplay` (each photo's `display`) and `photoEdits` (each photo's `crop`, `markup`); `originals` holds each photo's `original` by reference (not copied). Excludes adding/removing photos, config, ui. |
+| `restoreSnapshot(report, snapshot) → report` | Apply a snapshot in place (photo `display`, and `crop`/`markup`/`original` of photos it lists) and renumber. |
 
 ### core — file formats
 
@@ -202,6 +207,19 @@ a photo cell target (`obs:<id>`, `gen:<id>`).
 | `showPopover(anchor, content)` | Show `#popover` under an element. |
 | `closePopover()` | Hide the popover. |
 | `showMenu(anchor, items)` | Popover menu of `{ label, icon, run }`. |
+
+### app — floating toolbar
+
+One `#float-bar` (`role="toolbar"`) floats above one element at a time: today
+the selected photo (`photoToolbarActions()`) and crop mode (✓ / ✕). Other
+elements can use it by passing their own actions. State lives in `floatBar`
+(`{ anchor, observer }`).
+
+| Function | Description |
+| --- | --- |
+| `showFloatingToolbar(anchor, actions, { label })` | Replace any open toolbar with buttons for `[{ name, label, icon, run, kind }]` (`kind`: `primary` \| `danger`; `data-action` = `name`) and keep it on `anchor` (ResizeObserver, window resize). |
+| `hideFloatingToolbar()` | Hide and empty the toolbar. |
+| `placeFloatingToolbar()` | Center it above the anchor (below when there is no room), inside the viewport; hide it once the anchor is removed. |
 
 ### app — notify: messages and debug log
 
@@ -279,12 +297,12 @@ a photo cell target (`obs:<id>`, `gen:<id>`).
 | `photoCapRatio(kind) → number` | Screen max height as a multiple of the cell width: `photoMaxHeightIn()` ÷ `printPhotoCellWidthIn()`. |
 | `updatePhotoCaps()` | Refresh `--cap-ratio` on every photo cell (after cap, column width or template changes). |
 | `photoCell(target, ids, { readOnly, compact }) → Element` | Photo flow (`photoLayout()`: widths, alignment, cap) with add button or empty state. |
-| `photoFigure(photo, readOnly, width = 100) → Element` | One photo (`--w` = width %) with edit/remove buttons. |
+| `photoFigure(photo, readOnly, width = 100) → Element` | One photo (`--w` = width %); focusable when editable (no buttons on the photo itself). |
 | `trackAspect(img, fig)` | Set `--ar` (width ÷ height) on `fig` whenever `img` loads, so capped photos narrow. |
 | `setPhotoImage(img, photo)` | Show original, then the flattened preview. |
 | `refreshPhotoCell(target)` | Re-render one photo cell. |
 | `dropBeforeId(cell, x, y, skipId) → string\|null` | Photo to insert before at a point in the flow (reading order), ignoring `skipId`; null = end. |
-| `bindPhotoEvents()` | Click (edit, remove, add, cell ⋯ menu), file input, image file drop, paste, `photo:changed` listeners. |
+| `bindPhotoEvents()` | Click (add, cell ⋯ menu), file input, image file drop, paste, `photo:changed` listeners. |
 
 ### app — photos: pointer drag
 
@@ -298,7 +316,7 @@ photos). Mouse: drag after `PHOTO_MOUSE_SLOP` px. Touch/pen: long-press
 
 | Function | Description |
 | --- | --- |
-| `bindPhotoDrag()` | `pointerdown` on a photo (not its buttons) in an editable cell starts a gesture; blocks touch scroll and the long-press context menu while dragging. |
+| `bindPhotoDrag()` | `pointerdown` on a photo (not its handles, not in crop mode) in an editable cell starts a gesture; blocks touch scroll and the long-press context menu while dragging. |
 | `photoPointerMove(e)` | Start the mouse drag, abandon a touch long-press that moved (scroll), or update an active drag. |
 | `startPhotoDrag()` | Pointer capture, `.dragging`, `.photo-ghost` image, short vibration on touch, Escape listener, auto-scroll loop. |
 | `updatePhotoDrag()` | Move the ghost; hit-test the cell under the pointer (`.drag-over`), compute `beforeId`, place the indicator. |
@@ -315,10 +333,29 @@ photos). Mouse: drag after `PHOTO_MOUSE_SLOP` px. Touch/pen: long-press
 | Function | Description |
 | --- | --- |
 | `selectPhoto(id)` | Set `state.selectedPhotoId` (null clears) and update every editable photo. |
-| `setPhotoSelected(fig, on)` | `.selected` outline, four `.photo-handle` corners (36 px targets) and the `.photo-size` width label. |
-| `bindPhotoResize()` | Clear the selection on any pointerdown outside it; start a resize from a handle. |
+| `setPhotoSelected(fig, on)` | `.selected` outline, four `.photo-handle` corners (36 px targets), the `.photo-size` width label and the floating toolbar. |
+| `photoToolbarActions(fig) → action[]` | Crop, Rotate 90°, Edit photo, Remove photo. |
+| `removePhoto(target, photoId)` | Take a photo out of a cell; one undo step. |
+| `bindPhotoResize()` | Any pointerdown outside the selected photo and the toolbar applies an open crop and clears the selection; start a resize from a handle; Enter/Space on a focused photo selects it and focuses its toolbar. |
 | `startPhotoResize(e, handle)` | Corner drag: width follows the pointer (twice the move when centered), `snapPhotoWidth()`, live `--w` and label; on release one undo step writes `photo.display.width`; `pointercancel` reverts. |
 | `showPhotoCellMenu(anchor, target)` | Cell ⋯ popover: default width (25/50/75/100 %), alignment (left/center), "Reset photos to cell default" (clears overrides); each change is one undo step. |
+
+### app — photos: in-cell crop and rotate
+
+Crop mode (`photoCrop`: `{ fig, photo, target, W, H, box }`, or null) shows
+the full photo at its current width with the outside dimmed (`.crop-shade`),
+and a `.crop-box` with eight `.crop-handle`s (`data-edge`). Resize handles
+and pointer drag are off; the toolbar shows only ✓ / ✕. ✓, Enter or a
+pointerdown outside the photo applies; ✕, Escape, undo or redo discards.
+
+| Function | Description |
+| --- | --- |
+| `startPhotoCrop(fig)` | Enter crop mode on a photo (box = `photo.crop` or the whole photo). |
+| `placeCropBox()` | Position the crop box and the undimmed window (% of the photo). |
+| `startCropDrag(e)` | Handle or box drag via `resizeCrop()`, at least `CROP_MIN_PX` (24) screen px; `pointercancel` reverts. |
+| `finishPhotoCrop(apply)` | Leave crop mode; on apply write `normalizeCrop()` to `photo.crop` (one undo step when changed); re-render the cell. |
+| `bindPhotoCrop()` | `pointerdown` on the crop box starts `startCropDrag()`. |
+| `rotatePhoto(photoId)` | `rotatePhotoData()` on the photo; one undo step; emits `photo:changed`. |
 
 ### app — photos: flatten and markup drawing
 
@@ -336,6 +373,7 @@ photos). Mouse: drag after `PHOTO_MOUSE_SLOP` px. Touch/pen: long-press
 | `hitShape(s, x, y, tol, ctx) → boolean` | Hit test. |
 | `translateShape(s, dx, dy)` | Move a shape. |
 | `rotateShape90(s, height, ctx)` | Rotate a shape 90° clockwise with the photo. |
+| `rotatePhotoData(data, img) → { original, crop, markup }` | Original turned 90° clockwise (re-encoded JPEG), crop and markup follow. Shared by the editor and `rotatePhoto()`. |
 
 ### app — photo editor
 
@@ -344,7 +382,7 @@ photos). Mouse: drag after `PHOTO_MOUSE_SLOP` px. Touch/pen: long-press
 | `editorIsOpen() → boolean` | `#photo-editor` is open. |
 | `buildEditorToolbar()` | Build tools, colors, widths, commands; bind canvas events. |
 | `openPhotoEditor(photoId)` | Open on a working copy of the photo. |
-| `closePhotoEditor(save)` | Close; on save write back and emit `photo:changed`. |
+| `closePhotoEditor(save)` | Close; on save write back (one undo step when anything changed) and emit `photo:changed`. |
 | `sizeEditorCanvas()` | Match canvas pixels to its box. |
 | `fitEditor()` | Fit the image in view. |
 | `zoomEditorAt(x, y, factor)` | Zoom around a canvas point. |
@@ -359,7 +397,7 @@ photos). Mouse: drag after `PHOTO_MOUSE_SLOP` px. Touch/pen: long-press
 | `updateEditorButtons()` | Enable/disable undo, redo, delete, reset crop. |
 | `editorCommand(cmd)` | zoom-in, zoom-out, fit, rotate, reset-crop, delete, undo, redo, cancel, save. |
 | `deleteSelectedShape()` | Remove the selected shape. |
-| `rotateEditorPhoto()` | Rotate original 90° clockwise (re-encodes JPEG), crop and shapes follow. |
+| `rotateEditorPhoto()` | `rotatePhotoData()` on the working copy (an editor undo step). |
 | `requestEditorRender()` | Schedule a frame. |
 | `renderEditor()` | Draw image, shapes, crop shade, selection. |
 | `editorPoint(e) → {x, y}` | Pointer position in image coordinates. |
@@ -449,7 +487,7 @@ photos). Mouse: drag after `PHOTO_MOUSE_SLOP` px. Touch/pen: long-press
 
 | Function | Description |
 | --- | --- |
-| `bindGlobalEvents()` | Shortcuts (Escape also clears the photo selection), unload warning, autosave triggers, JSON drop, event listeners. |
+| `bindGlobalEvents()` | Shortcuts (in crop mode Enter applies and Escape discards; otherwise Escape also clears the photo selection), toolbar placement on resize, unload warning, autosave triggers, JSON drop, event listeners. |
 | `init()` | Route `window` errors to `reportUncaught()`, `detectCapabilities()`, build UI, load a blank report, WebView notice, set `data-ready`, offer recovery. |
 
 ## 3. State

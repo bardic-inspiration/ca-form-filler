@@ -469,3 +469,71 @@ test('undo restores photo width overrides and cell display options', () => {
   Core.restoreSnapshot(r, history.redo(Core.snapshotReport(r)));
   deepEq(r.photos[p.id].display, { width: 50 });
 });
+
+test('undo restores a photo crop, markup and original (in-cell crop and rotate)', () => {
+  const r = sampleReport();
+  const p = Core.createPhoto('data:image/jpeg;base64,AAA', 'a.jpg');
+  r.photos[p.id] = p;
+  addObservation(r, { photoIds: [p.id] });
+  const history = new Core.History(100);
+
+  history.record(Core.snapshotReport(r));
+  p.crop = { x: 10, y: 20, w: 30, h: 40 };
+  history.record(Core.snapshotReport(r));
+  Object.assign(p, { original: 'data:image/jpeg;base64,ROTATED', crop: { x: 5, y: 10, w: 40, h: 30 }, markup: [{ id: 's', type: 'line' }] });
+
+  Core.restoreSnapshot(r, history.undo(Core.snapshotReport(r)));
+  assert.equal(p.original, 'data:image/jpeg;base64,AAA');
+  deepEq(p.crop, { x: 10, y: 20, w: 30, h: 40 });
+  deepEq(p.markup, []);
+  Core.restoreSnapshot(r, history.undo(Core.snapshotReport(r)));
+  assert.equal(p.crop, null);
+  Core.restoreSnapshot(r, history.redo(Core.snapshotReport(r)));
+  Core.restoreSnapshot(r, history.redo(Core.snapshotReport(r)));
+  assert.equal(p.original, 'data:image/jpeg;base64,ROTATED');
+  deepEq(p.crop, { x: 5, y: 10, w: 40, h: 30 });
+  deepEq(p.markup, [{ id: 's', type: 'line' }]);
+});
+
+test('undo snapshots hold photo originals by reference, not inside the JSON', () => {
+  const r = sampleReport();
+  const big = 'data:image/jpeg;base64,' + 'A'.repeat(100000);
+  const p = Core.createPhoto(big, 'a.jpg');
+  r.photos[p.id] = p;
+  const snap = Core.snapshotReport(r);
+  assert.ok(snap.json.length < 50000);
+  assert.equal(snap.originals[p.id], big);
+});
+
+test('rotateCrop90 turns a crop clockwise with the photo', () => {
+  // 100 wide × 60 high photo; after rotating it is 60 wide × 100 high.
+  deepEq(Core.rotateCrop90({ x: 10, y: 5, w: 30, h: 20 }, 60), { x: 35, y: 10, w: 20, h: 30 });
+  assert.equal(Core.rotateCrop90(null, 60), null);
+});
+
+test('resizeCrop moves edges, corners and the whole box within the photo', () => {
+  const start = { x: 20, y: 20, w: 40, h: 30 };
+  const W = 100;
+  const H = 80;
+  deepEq(Core.resizeCrop(start, 'e', 10, 99, W, H, 5), { x: 20, y: 20, w: 50, h: 30 });
+  deepEq(Core.resizeCrop(start, 'w', -10, 0, W, H, 5), { x: 10, y: 20, w: 50, h: 30 });
+  deepEq(Core.resizeCrop(start, 'n', 0, 5, W, H, 5), { x: 20, y: 25, w: 40, h: 25 });
+  deepEq(Core.resizeCrop(start, 'se', 100, 100, W, H, 5), { x: 20, y: 20, w: 80, h: 60 });
+  deepEq(Core.resizeCrop(start, 'nw', -100, -100, W, H, 5), { x: 0, y: 0, w: 60, h: 50 });
+  deepEq(Core.resizeCrop(start, 'move', 100, -100, W, H, 5), { x: 60, y: 0, w: 40, h: 30 });
+  deepEq(Core.resizeCrop(start, 'move', 5, 5, W, H, 5), { x: 25, y: 25, w: 40, h: 30 });
+});
+
+test('resizeCrop never shrinks the box below the minimum size', () => {
+  const start = { x: 20, y: 20, w: 40, h: 30 };
+  deepEq(Core.resizeCrop(start, 'e', -100, 0, 100, 80, 8), { x: 20, y: 20, w: 8, h: 30 });
+  deepEq(Core.resizeCrop(start, 'nw', 100, 100, 100, 80, 8), { x: 52, y: 42, w: 8, h: 8 });
+});
+
+test('normalizeCrop rounds into the photo and treats the whole photo as no crop', () => {
+  deepEq(Core.normalizeCrop({ x: 10.4, y: 0.2, w: 50.3, h: 40.6 }, 100, 80), { x: 10, y: 0, w: 51, h: 41 });
+  deepEq(Core.normalizeCrop({ x: -3, y: 70, w: 200, h: 20 }, 100, 80), { x: 0, y: 70, w: 100, h: 10 });
+  assert.equal(Core.normalizeCrop({ x: 0, y: 0, w: 100, h: 80 }, 100, 80), null);
+  assert.equal(Core.normalizeCrop({ x: 0.3, y: 0.2, w: 99.8, h: 79.9 }, 100, 80), null);
+  assert.equal(Core.normalizeCrop(null, 100, 80), null);
+});
