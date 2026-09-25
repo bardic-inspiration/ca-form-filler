@@ -278,3 +278,61 @@ test('detects Android embedded WebViews but not Chrome itself', () => {
   assert.equal(Core.isEmbeddedWebView(desktop), false);
   assert.equal(Core.isEmbeddedWebView(''), false);
 });
+
+test('every notify code used in the app is in the catalog', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { HTML_PATH } = await import('./load-core.mjs');
+  const html = readFileSync(HTML_PATH, 'utf8');
+  const shown = [...html.matchAll(/notify\.(?:info|warn|error)\(\s*'(\w+)'/g)].map((m) => m[1]);
+  const logged = [...html.matchAll(/notify\.log\(\s*'\w+',\s*'(\w+)'/g)].map((m) => m[1]);
+  assert.ok(shown.length > 0 && logged.length > 0, 'expected notify calls in field-report.html');
+  for (const code of shown) assert.ok(Core.MESSAGES[code], `MESSAGES is missing ${code}`);
+  for (const code of logged) assert.ok(Core.LOG_CODES[code] || Core.MESSAGES[code], `LOG_CODES is missing ${code}`);
+  for (const [code, m] of Object.entries(Core.MESSAGES)) {
+    assert.ok(m.title && m.message && m.action, `${code} needs a title, message and action`);
+  }
+});
+
+test('debug log keeps the last 200 entries', () => {
+  const log = new Core.DebugLog();
+  for (let i = 0; i < 250; i++) log.add('info', 'CODE', `entry ${i}`, new Date(Date.UTC(2026, 0, 1, 0, 0, i)));
+  assert.equal(log.entries.length, 200);
+  deepEq(log.entries[0], { time: '2026-01-01T00:00:50.000Z', level: 'info', code: 'CODE', detail: 'entry 50' });
+  assert.equal(log.entries[199].detail, 'entry 249');
+});
+
+test('error details drop data URLs and are capped in length', () => {
+  const err = new TypeError('bad data:image/jpeg;base64,' + 'A'.repeat(5000));
+  const detail = Core.describeError(err);
+  assert.match(detail, /^TypeError: bad data:…/);
+  assert.doesNotMatch(detail, /AAAA/);
+  assert.ok(Core.describeError('x'.repeat(5000)).length <= 1000);
+  assert.equal(Core.describeError(null), '');
+});
+
+test('debug report lists versions, capabilities and the log, and no report content', () => {
+  const log = new Core.DebugLog();
+  log.add('error', 'OPEN_INVALID_FILE', 'img data:image/png;base64,QUJD', new Date(Date.UTC(2026, 5, 26, 14, 0, 0)));
+  const text = Core.formatDebugReport({
+    userAgent: 'UA/1.0', capabilities: { indexedDB: true, originScheme: 'file:' },
+    entries: log.entries, now: new Date(Date.UTC(2026, 5, 26, 15, 0, 0)),
+  });
+  assert.match(text, /^Field Report debug info\n/);
+  assert.match(text, /Generated: 2026-06-26T15:00:00\.000Z/);
+  assert.match(text, /App: WM-FieldReport, schema 1/);
+  assert.match(text, /User agent: UA\/1\.0/);
+  assert.match(text, /indexedDB: true/);
+  assert.match(text, /originScheme: file:/);
+  assert.match(text, /2026-06-26T14:00:00\.000Z error OPEN_INVALID_FILE img data:…/);
+  assert.doesNotMatch(text, /QUJD/);
+});
+
+test('parse errors are marked as user-facing', () => {
+  try {
+    Core.parseReport('{not json');
+    assert.fail('expected a throw');
+  } catch (err) {
+    assert.equal(err.userFacing, true);
+  }
+  assert.equal(Core.userError('x').userFacing, true);
+});

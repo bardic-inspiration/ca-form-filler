@@ -3,7 +3,9 @@
 //   1. every inline <script> parses;
 //   2. nothing reaches the network (the tool must run offline from file://);
 //   3. DEVELOPER.md lists every section (with its current line range),
-//      every function and every custom event in the file.
+//      every function and every custom event in the file;
+//   4. errors go through notify: no empty catch without a comment, and no
+//      console.* or alertDialog() calls outside the notify section.
 // Usage: node tools/lint.mjs            run all checks
 //        node tools/lint.mjs --file-map print the DEVELOPER.md file map table
 import { readFileSync } from 'node:fs';
@@ -58,6 +60,26 @@ lines.forEach((line, i) => {
   }
 });
 
+// 4. Error handling goes through notify.
+const lineOf = (index) => html.slice(0, index).split('\n').length;
+const emptyCatch = [
+  /\bcatch\s*(?:\([^)]*\))?\s*\{\s*\}/g, // try {} catch (err) {}
+  /\.catch\(\s*(?:\(\s*\w*\s*\)|\w+)\s*=>\s*(?:\{\s*\}|undefined|null)\s*\)/g, // .catch(() => {})
+];
+for (const re of emptyCatch) {
+  for (const m of html.matchAll(re)) {
+    errors.push(`field-report.html:${lineOf(m.index)}: empty catch; report it through notify or add a comment saying why it is silent`);
+  }
+}
+const notifySection = sections.find((s) => s.name.startsWith('app — notify'));
+lines.forEach((line, i) => {
+  const n = i + 1;
+  const inNotify = notifySection && n >= notifySection.start && n <= notifySection.end;
+  if (inNotify || /^async function alertDialog\(/.test(line)) return;
+  if (/\bconsole\.\w+/.test(line)) errors.push(`field-report.html:${n}: use notify instead of console`);
+  if (/\balertDialog\(/.test(line)) errors.push(`field-report.html:${n}: use notify.error() instead of alertDialog()`);
+});
+
 // 3. DEVELOPER.md stays in sync with the code.
 let dev = '';
 try {
@@ -95,4 +117,4 @@ if (errors.length) {
   console.error(`\n${errors.length} problem(s).`);
   process.exit(1);
 }
-console.log(`✓ field-report.html: ${scripts.length} scripts parse, offline-only, DEVELOPER.md in sync (${sections.length} sections).`);
+console.log(`✓ field-report.html: ${scripts.length} scripts parse, offline-only, errors via notify, DEVELOPER.md in sync (${sections.length} sections).`);

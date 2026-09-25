@@ -408,12 +408,12 @@ function parseReport(json) {
   try {
     data = typeof json === 'string' ? JSON.parse(json) : json;
   } catch (err) {
-    throw new Error('This file is not a valid report (it could not be read).');
+    throw userError('This file is not a valid report (it could not be read).');
   }
-  if (!data || data.app !== APP_ID) throw new Error('This file is not a Field Observation Report.');
-  if (typeof data.schemaVersion !== 'number') throw new Error('This report file is missing its version number.');
+  if (!data || data.app !== APP_ID) throw userError('This file is not a Field Observation Report.');
+  if (typeof data.schemaVersion !== 'number') throw userError('This report file is missing its version number.');
   if (data.schemaVersion > SCHEMA_VERSION) {
-    throw new Error('This report was saved by a newer version of the tool. Please use the latest file.');
+    throw userError('This report was saved by a newer version of the tool. Please use the latest file.');
   }
   return normalizeReport(migrate(data));
 }
@@ -448,10 +448,143 @@ function officeDefaultsJSON(report) {
 
 function applyOfficeDefaults(report, json) {
   const data = typeof json === 'string' ? JSON.parse(json) : json;
-  if (!data || data.app !== DEFAULTS_APP_ID) throw new Error('This file is not an office defaults file.');
+  if (!data || data.app !== DEFAULTS_APP_ID) throw userError('This file is not an office defaults file.');
   report.config = { ...clone(DEFAULT_CONFIG), ...clone(data.config || {}) };
   report.tags = clone(data.tags || []);
   return report;
+}
+
+/* ==== SECTION: core — messages and debug log ==== */
+
+const OPEN_IN_BROWSER_HELP =
+  'Open field-report.html in the Chrome or Edge app instead (in your Files app: ⋮ → Open with → Chrome).';
+const SEND_DEBUG_HELP = 'If it keeps happening, use Settings → Copy debug info and send it to a maintainer.';
+
+// User-facing messages, shown by notify.info/warn/error. Keyed by code.
+const MESSAGES = {
+  FILE_PICKER_UNAVAILABLE: {
+    title: 'No file picker',
+    message: 'No file picker opened. This viewer may not support choosing files.',
+    action: OPEN_IN_BROWSER_HELP,
+  },
+  PRINT_UNAVAILABLE: {
+    title: 'Could not export PDF',
+    message: "The print window didn't open, so no PDF was made. This viewer may not support printing.",
+    action: OPEN_IN_BROWSER_HELP,
+  },
+  EMBEDDED_VIEWER: {
+    title: 'Limited viewer',
+    message: 'You are viewing this inside another app, so adding photos, saving and exporting PDFs may not work.',
+    action: OPEN_IN_BROWSER_HELP,
+  },
+  OPEN_INVALID_FILE: {
+    title: 'Could not open file',
+    message: 'This file could not be opened as a report.',
+    action: 'Choose a report .json file saved by this tool.',
+  },
+  NEXT_REPORT_FAILED: {
+    title: 'Could not start the next report',
+    message: 'The previous report could not be read.',
+    action: "Choose the previous report's .json file.",
+  },
+  RESTORE_FAILED: {
+    title: 'Could not restore',
+    message: 'The unsaved work could not be restored.',
+    action: 'Open your last saved report file instead.',
+  },
+  SAVE_FAILED: {
+    title: 'Could not save',
+    message: 'The report could not be saved.',
+    action: 'Try Save As. ' + SEND_DEBUG_HELP,
+  },
+  STORAGE_UNAVAILABLE: {
+    title: 'Backup is off',
+    message: 'Automatic backup is not available in this browser, so unsaved work cannot be restored after a crash.',
+    action: 'Save often (Ctrl+S).',
+  },
+  IMAGE_UNREADABLE: {
+    title: 'Could not read image',
+    message: 'This image could not be read.',
+    action: 'Try a JPEG or PNG photo.',
+  },
+  PDF_PREPARE_FAILED: {
+    title: 'Could not prepare the PDF',
+    message: 'The PDF could not be prepared.',
+    action: 'Try again. ' + SEND_DEBUG_HELP,
+  },
+  DEBUG_INFO_DOWNLOADED: {
+    title: 'Debug info downloaded',
+    message: "Copying isn't available here, so the debug info was saved to your Downloads folder as field-report-debug.txt.",
+    action: 'Attach that file to your message to a maintainer.',
+  },
+  UNEXPECTED_ERROR: {
+    title: 'Something went wrong',
+    message: 'Something went wrong in the tool.',
+    action: 'Save your work, then reload the page. ' + SEND_DEBUG_HELP,
+  },
+};
+
+// Codes that are only written to the debug log (notify.log), never shown.
+const LOG_CODES = {
+  CAPABILITIES: 'Browser features detected at startup.',
+  SHOW_PICKER_FALLBACK: 'input.showPicker() threw; fell back to input.click().',
+  FS_ACCESS_FALLBACK: 'File System Access failed; fell back to the file input or a download.',
+  WRITE_PERMISSION_FAILED: 'Checking write permission on the open file threw.',
+  AUTOSAVE_READ_FAILED: 'Reading the autosave record failed.',
+  AUTOSAVE_WRITE_FAILED: 'Writing the autosave record failed (after the first warning).',
+  PREVIEW_FAILED: 'A photo preview or print image could not be drawn; the original is shown.',
+  CLIPBOARD_FALLBACK: 'Copying debug info to the clipboard failed; downloaded it instead.',
+  EMBEDDED_VIEWER: 'Running in an embedded WebView; the #notice banner shows MESSAGES.EMBEDDED_VIEWER.',
+  RESIZE_OBSERVER_LOOP: 'Harmless "ResizeObserver loop" window error, logged instead of shown.',
+};
+
+const DEBUG_LOG_LIMIT = 200;
+const DEBUG_DETAIL_MAX = 1000;
+
+// An error whose message is written for users; notify shows it as the reason.
+function userError(message) {
+  return Object.assign(new Error(message), { userFacing: true });
+}
+
+// One-line-ish text for the debug log. Drops data URLs (photos) and caps length.
+function describeError(err) {
+  if (err == null) return '';
+  let s = typeof err === 'string' ? err : `${err.name || 'Error'}: ${err.message || String(err)}`;
+  if (err && err.stack) s += '\n' + String(err.stack).split('\n').slice(1, 6).join('\n');
+  s = s.replace(/data:[^\s"')]+/g, 'data:…');
+  return s.length > DEBUG_DETAIL_MAX ? s.slice(0, DEBUG_DETAIL_MAX - 1) + '…' : s;
+}
+
+// In-memory ring buffer of { time, level, code, detail }. Never saved to files.
+class DebugLog {
+  constructor(limit = DEBUG_LOG_LIMIT) {
+    this.limit = limit;
+    this.entries = [];
+  }
+
+  add(level, code, detail = '', time = new Date()) {
+    const entry = { time: time.toISOString(), level, code, detail: describeError(detail) };
+    this.entries.push(entry);
+    if (this.entries.length > this.limit) this.entries.splice(0, this.entries.length - this.limit);
+    return entry;
+  }
+}
+
+function formatDebugReport({ userAgent = '', capabilities = {}, entries = [], now = new Date() } = {}) {
+  const indent = (s) => String(s).replace(/\n/g, '\n    ');
+  return [
+    'Field Report debug info',
+    `Generated: ${now.toISOString()}`,
+    `App: ${APP_ID}, schema ${SCHEMA_VERSION}`,
+    `User agent: ${userAgent}`,
+    '',
+    'Capabilities:',
+    ...Object.entries(capabilities).map(([k, v]) => `  ${k}: ${v}`),
+    '',
+    `Log (${entries.length} entries, oldest first):`,
+    ...entries.map((e) => indent(`  ${e.time} ${e.level} ${e.code} ${describeError(e.detail)}`.trimEnd())),
+    '',
+  ].join('\n');
 }
 
 const Core = Object.freeze({
@@ -464,6 +597,7 @@ const Core = Object.freeze({
   History, snapshotReport, restoreSnapshot,
   fileBaseName, referencedPhotoIds, serializeReport, migrate, normalizeReport, parseReport,
   csvField, toCSV, officeDefaultsJSON, applyOfficeDefaults,
+  MESSAGES, LOG_CODES, DebugLog, userError, describeError, formatDebugReport,
 });
 </script>
 <style id="styles">
@@ -1019,9 +1153,6 @@ function downloadBlob(name, blob) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
-const OPEN_IN_BROWSER_HELP =
-  'Open field-report.html in the Chrome or Edge app instead (in your Files app: ⋮ → Open with → Chrome).';
-
 // Embedded viewers fail silently: file pickers and print simply never appear.
 // A real picker or print window blurs or hides the page, so if neither happens
 // within timeoutMs, call onMissing. Returns mark(), to call on other evidence.
@@ -1039,30 +1170,33 @@ function expectBrowserWindow(timeoutMs, onMissing) {
 }
 
 function openFilePicker(input) {
-  const mark = expectBrowserWindow(1500, () => toast(
-    'No file picker? This viewer may not support choosing files. ' + OPEN_IN_BROWSER_HELP, 9000));
+  const mark = expectBrowserWindow(1500, () => notify.warn('FILE_PICKER_UNAVAILABLE'));
   input.addEventListener('change', mark, { once: true });
   input.addEventListener('cancel', mark, { once: true });
   try {
     input.showPicker();
   } catch (err) {
+    notify.log('info', 'SHOW_PICKER_FALLBACK', err);
     input.click();
   }
 }
 
+// The banner stays up for the whole visit, so it is page chrome, not a toast.
 function showEnvironmentNotice() {
-  if (!isEmbeddedWebView(navigator.userAgent)) return;
+  if (!capabilities.embeddedWebView) return;
+  notify.log('warn', 'EMBEDDED_VIEWER', navigator.userAgent);
   const notice = $('#notice');
-  notice.textContent = 'You are viewing this inside another app, so adding photos, saving and exporting PDFs may not work. '
-    + OPEN_IN_BROWSER_HELP;
+  notice.textContent = messageText('EMBEDDED_VIEWER');
   notice.hidden = false;
 }
 
 function safeLocalGet(key) {
+  // Silent: localStorage only holds "tip shown" flags; its availability is logged at startup.
   try { return localStorage.getItem(key); } catch (err) { return null; }
 }
 
 function safeLocalSet(key, value) {
+  // Silent: see safeLocalGet().
   try { localStorage.setItem(key, value); } catch (err) { /* storage unavailable */ }
 }
 
@@ -1081,6 +1215,7 @@ const state = {
   autosaveTimer: null,
   printPrepared: false,
   printOpened: false,
+  autosaveWarned: false,
   pendingPhotoTarget: null,
   hoverPhotoTarget: null,
 };
@@ -1184,8 +1319,11 @@ async function confirmDialog(message, { title = 'Please confirm', ok = 'OK', can
   return value === 'ok';
 }
 
-async function alertDialog(message, title = 'Something went wrong') {
-  await modal({ title, body: [h('p', null, message)], buttons: [{ label: 'OK', value: 'ok', kind: 'primary' }] });
+async function alertDialog(message, title = 'Something went wrong', hint = '') {
+  await modal({
+    title, body: [h('p', null, message), hint && h('p', { class: 'hint' }, hint)],
+    buttons: [{ label: 'OK', value: 'ok', kind: 'primary' }],
+  });
 }
 
 async function promptDialog(title, label, value) {
@@ -1230,6 +1368,79 @@ function showMenu(anchor, items) {
       type: 'button', class: 'menu-item', role: 'menuitem',
       onclick: () => { closePopover(); item.run(); },
     }, item.icon && icon(item.icon), item.label))));
+}
+
+/* ==== SECTION: app — notify: messages and debug log ==== */
+
+// The one place that tells the user about problems. Levels: info and warn show
+// a toast, error shows a dialog; every call is also written to the debug log.
+// notify.log() writes to the debug log only (codes in LOG_CODES).
+const debugLog = new DebugLog();
+let capabilities = {};
+
+const notify = Object.freeze({
+  info: (code, opts) => notifyUser('info', code, opts),
+  warn: (code, opts) => notifyUser('warn', code, opts),
+  error: (code, opts) => notifyUser('error', code, opts),
+  log: (level, code, detail) => debugLog.add(level, code, detail),
+});
+
+function messageText(code) {
+  const m = MESSAGES[code];
+  return m.message + ' ' + m.action;
+}
+
+// opts.err: the caught error (its message is shown when userFacing);
+// opts.detail: extra text for the debug log only.
+function notifyUser(level, code, { err, detail } = {}) {
+  const m = MESSAGES[code] || MESSAGES.UNEXPECTED_ERROR;
+  debugLog.add(level, code, [detail, describeError(err)].filter(Boolean).join('\n'));
+  const message = err && err.userFacing ? err.message : m.message;
+  if (level === 'error') return alertDialog(message, m.title, m.action);
+  toast(message + ' ' + m.action, level === 'warn' ? 9000 : 5000);
+  return Promise.resolve();
+}
+
+let uncaughtShowing = false;
+function reportUncaught(err, detail) {
+  document.documentElement.dataset.error = detail || describeError(err) || 'unknown error';
+  if (uncaughtShowing) {
+    notify.log('error', 'UNEXPECTED_ERROR', [detail, describeError(err)].filter(Boolean).join('\n'));
+    return;
+  }
+  uncaughtShowing = true;
+  notify.error('UNEXPECTED_ERROR', { err, detail }).finally(() => { uncaughtShowing = false; });
+}
+
+function detectCapabilities() {
+  const probe = (fn) => {
+    // Silent: a throw here is the answer (feature blocked), and it is logged below.
+    try { return !!fn(); } catch (err) { return false; }
+  };
+  capabilities = {
+    fileSystemAccess: FS_ACCESS,
+    showPicker: typeof HTMLInputElement.prototype.showPicker === 'function',
+    indexedDB: probe(() => window.indexedDB),
+    localStorage: probe(() => { localStorage.setItem('wm-field-report:probe', '1'); localStorage.removeItem('wm-field-report:probe'); return true; }),
+    print: typeof window.print === 'function',
+    clipboard: probe(() => navigator.clipboard && navigator.clipboard.writeText),
+    embeddedWebView: isEmbeddedWebView(navigator.userAgent),
+    originScheme: location.protocol,
+  };
+  notify.log('info', 'CAPABILITIES', Object.entries(capabilities).map(([k, v]) => `${k}=${v}`).join(' '));
+  return capabilities;
+}
+
+async function copyDebugInfo() {
+  const text = formatDebugReport({ userAgent: navigator.userAgent, capabilities, entries: debugLog.entries });
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Debug info copied. Paste it into a message to a maintainer.');
+  } catch (err) {
+    notify.log('info', 'CLIPBOARD_FALLBACK', err);
+    downloadBlob('field-report-debug.txt', new Blob([text], { type: 'text/plain' }));
+    notify.info('DEBUG_INFO_DOWNLOADED');
+  }
 }
 
 /* ==== SECTION: app — render: toolbar and header ==== */
@@ -1923,7 +2134,7 @@ async function addPhotosTo(target, files, beforeId = null) {
       if (at < 0) list.push(photo.id); else list.splice(at, 0, photo.id);
     }
   } catch (err) {
-    alertDialog(err.message);
+    notify.error('IMAGE_UNREADABLE', { err });
   } finally {
     hideBusy();
     markDirty();
@@ -1963,7 +2174,7 @@ function photoFigure(photo, readOnly) {
 function setPhotoImage(img, photo) {
   if (!photo.crop && !photo.markup.length) { img.src = photo.original; return; }
   img.src = photo.original;
-  flattenPhoto(photo, 1000, 0.85).then((url) => { img.src = url; }).catch(() => {});
+  flattenPhoto(photo, 1000, 0.85).then((url) => { img.src = url; }).catch((err) => notify.log('warn', 'PREVIEW_FAILED', err));
 }
 
 function refreshPhotoCell(target) {
@@ -2359,7 +2570,7 @@ async function openPhotoEditor(photoId) {
   try {
     editor.img = await loadImage(photo.original);
   } catch (err) {
-    return alertDialog(err.message);
+    return notify.error('IMAGE_UNREADABLE', { err });
   }
   $('#photo-editor').showModal();
   sizeEditorCanvas();
@@ -2844,6 +3055,7 @@ async function pickJSONFile() {
     } catch (err) {
       if (err.name === 'AbortError') return null;
       // Picker unavailable in this context: fall back to the file input.
+      notify.log('info', 'FS_ACCESS_FALLBACK', err);
     }
   }
   const file = await pickFileViaInput();
@@ -2859,7 +3071,7 @@ async function openReportFile(picked) {
     writeAutosave();
     toast('Opened ' + file.name);
   } catch (err) {
-    alertDialog(err.message, 'Could not open file');
+    notify.error('OPEN_INVALID_FILE', { err, detail: file.name });
   }
 }
 
@@ -2890,7 +3102,7 @@ async function newReportFromPrevious() {
     const n = next.inherited.length;
     toast(`${reportTitle(next)} started. ${n} open item${n === 1 ? '' : 's'} carried forward.`, 4500);
   } catch (err) {
-    alertDialog(err.message, 'Could not start the next report');
+    notify.error('NEXT_REPORT_FAILED', { err, detail: file.name });
   }
 }
 
@@ -2900,6 +3112,7 @@ async function ensureWritePermission(handle) {
     if ((await handle.queryPermission({ mode: 'readwrite' })) === 'granted') return true;
     return (await handle.requestPermission({ mode: 'readwrite' })) === 'granted';
   } catch (err) {
+    notify.log('warn', 'WRITE_PERMISSION_FAILED', err);
     return false;
   }
 }
@@ -2928,6 +3141,7 @@ async function saveReport({ saveAs = false } = {}) {
     } catch (err) {
       if (err.name === 'AbortError') return false;
       // File System Access refused (e.g. file:// restrictions): fall back to download.
+      notify.log('info', 'FS_ACCESS_FALLBACK', err);
     }
   }
   let name = defaultFileName('.json');
@@ -2936,7 +3150,12 @@ async function saveReport({ saveAs = false } = {}) {
     if (!chosen) return false;
     name = /\.json$/i.test(chosen) ? chosen : chosen + '.json';
   }
-  downloadBlob(name, new Blob([json], { type: 'application/json' }));
+  try {
+    downloadBlob(name, new Blob([json], { type: 'application/json' }));
+  } catch (err) {
+    notify.error('SAVE_FAILED', { err });
+    return false;
+  }
   state.fileName = name;
   afterSaved('Saved a copy to your Downloads folder: ' + name);
   return true;
@@ -2997,7 +3216,9 @@ async function writeAutosave() {
     }
     state.autosavedCount = count;
   } catch (err) {
-    console.warn('Autosave unavailable:', err);
+    if (state.autosaveWarned) notify.log('warn', 'AUTOSAVE_WRITE_FAILED', err);
+    else notify.warn('STORAGE_UNAVAILABLE', { err });
+    state.autosaveWarned = true;
   }
 }
 
@@ -3005,6 +3226,7 @@ async function readAutosave() {
   try {
     return await idbRequest('readonly', (store) => store.get(IDB_KEY));
   } catch (err) {
+    notify.log('warn', 'AUTOSAVE_READ_FAILED', err);
     return null;
   }
 }
@@ -3030,7 +3252,7 @@ async function offerAutosaveRecovery() {
     loadReport(parseReport(rec.json), { fileHandle: rec.fileHandle || null, fileName: rec.fileName || '', dirty: true });
     toast('Unsaved work restored. Remember to Save.');
   } catch (err) {
-    alertDialog(err.message, 'Could not restore');
+    notify.error('RESTORE_FAILED', { err });
   }
   return undefined;
 }
@@ -3165,7 +3387,7 @@ async function preparePrint() {
     urls.set(id, await flattenPhoto(r.photos[id], size, quality));
   }));
   renderPrint((id) => urls.get(id));
-  await Promise.all($$('#print-root img').map((img) => img.decode().catch(() => {})));
+  await Promise.all($$('#print-root img').map((img) => img.decode().catch((err) => notify.log('warn', 'PREVIEW_FAILED', err))));
   state.printPrepared = true;
 }
 
@@ -3197,7 +3419,7 @@ async function exportPDF() {
     await preparePrint();
   } catch (err) {
     hideBusy();
-    return alertDialog(err.message, 'Could not prepare the PDF');
+    return notify.error('PDF_PREPARE_FAILED', { err });
   }
   hideBusy();
   document.title = defaultFileName('');
@@ -3205,8 +3427,7 @@ async function exportPDF() {
   const mark = expectBrowserWindow(2000, () => {
     if (state.printOpened) return;
     document.title = 'Field Observation Report';
-    alertDialog("The print window didn't open, so no PDF was made. This viewer may not support printing. "
-      + OPEN_IN_BROWSER_HELP, 'Could not export PDF');
+    notify.error('PRINT_UNAVAILABLE');
   });
   window.print();
   if (state.printOpened) mark();
@@ -3396,7 +3617,11 @@ function renderConfigPanel() {
         h('input', {
           type: 'number', min: 5, value: state.report.config.autosaveSeconds,
           oninput: (e) => setConfig('autosaveSeconds', Math.max(5, Math.floor(Number(e.target.value)) || 30)),
-        }))));
+        }))),
+    section('Troubleshooting',
+      h('p', { class: 'hint' }, 'Copies browser details and a log of recent problems to send to a maintainer. '
+        + 'It never includes report content or photos.'),
+      h('button', { type: 'button', class: 'btn', onclick: copyDebugInfo }, 'Copy debug info')));
 }
 
 function openConfig() {
@@ -3462,14 +3687,21 @@ function bindGlobalEvents() {
     if (!hasFiles(e)) return;
     e.preventDefault();
     const file = [...e.dataTransfer.files].find((f) => /\.json$/i.test(f.name) || f.type === 'application/json');
-    if (file) file.text().then((text) => openReportFile({ handle: null, name: file.name, text }));
+    if (!file) return;
+    file.text().then((text) => openReportFile({ handle: null, name: file.name, text }))
+      .catch((err) => notify.error('OPEN_INVALID_FILE', { err, detail: file.name }));
   });
 
   $('#file-logo').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     e.target.value = '';
     if (!file) return;
-    setConfig('logo', await readFileAsDataURL(file));
+    try {
+      setConfig('logo', await readFileAsDataURL(file));
+    } catch (err) {
+      notify.error('IMAGE_UNREADABLE', { err, detail: file.name });
+      return;
+    }
     const logo = $('#config-logo');
     if (logo) logo.replaceWith(logoEditor());
   });
@@ -3486,8 +3718,14 @@ function bindGlobalEvents() {
 }
 
 function init() {
-  window.addEventListener('error', (e) => { document.documentElement.dataset.error = e.message; });
-  window.addEventListener('unhandledrejection', (e) => { document.documentElement.dataset.error = String(e.reason); });
+  window.addEventListener('error', (e) => {
+    const where = `${e.message} (${e.filename}:${e.lineno}:${e.colno})`;
+    // Chrome reports this harmless ResizeObserver notice as an error; log it only.
+    if (/ResizeObserver loop/.test(e.message)) return notify.log('info', 'RESIZE_OBSERVER_LOOP', where);
+    return reportUncaught(e.error, where);
+  });
+  window.addEventListener('unhandledrejection', (e) => reportUncaught(e.reason, 'Unhandled rejection'));
+  detectCapabilities();
   buildToolbar();
   buildEditorToolbar();
   bindGlobalEvents();
