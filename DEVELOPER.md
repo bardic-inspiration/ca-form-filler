@@ -24,32 +24,33 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 | css — header form | 775–806 |
 | css — general observations | 807–819 |
 | css — observation table | 820–876 |
-| css — photos | 877–918 |
-| css — reminders | 919–926 |
-| css — popovers, dialogs, panel | 927–990 |
-| css — photo editor | 991–1023 |
-| css — responsive | 1024–1053 |
-| css — print | 1054–1115 |
-| markup — shell | 1116–1154 |
-| app — dom helpers and icons | 1155–1305 |
-| app — state and events | 1306–1396 |
-| app — dialogs and popovers | 1397–1475 |
-| app — notify: messages and debug log | 1476–1548 |
-| app — render: toolbar and header | 1549–1742 |
-| app — render: general observations | 1743–1798 |
-| app — render: observations table | 1799–2007 |
-| app — render: filters and reminders | 2008–2099 |
-| app — sorting and column resize | 2100–2189 |
-| app — photos: import, cells, drag and drop | 2190–2426 |
-| app — photos: flatten and markup drawing | 2427–2614 |
-| app — photo editor | 2615–3154 |
-| app — persistence: files | 3155–3305 |
-| app — persistence: autosave (IndexedDB) | 3306–3394 |
-| app — export: CSV | 3395–3402 |
-| app — export: PDF (print) | 3403–3602 |
-| app — config panel | 3603–3790 |
-| app — office defaults (developer stub) | 3791–3805 |
-| app — keyboard, window events and init | 3806–3899 |
+| css — photos | 877–923 |
+| css — reminders | 924–931 |
+| css — popovers, dialogs, panel | 932–995 |
+| css — photo editor | 996–1028 |
+| css — responsive | 1029–1058 |
+| css — print | 1059–1120 |
+| markup — shell | 1121–1159 |
+| app — dom helpers and icons | 1160–1310 |
+| app — state and events | 1311–1402 |
+| app — dialogs and popovers | 1403–1481 |
+| app — notify: messages and debug log | 1482–1554 |
+| app — render: toolbar and header | 1555–1748 |
+| app — render: general observations | 1749–1804 |
+| app — render: observations table | 1805–2013 |
+| app — render: filters and reminders | 2014–2105 |
+| app — sorting and column resize | 2106–2195 |
+| app — photos: import, cells, drag and drop | 2196–2406 |
+| app — photos: pointer drag | 2407–2568 |
+| app — photos: flatten and markup drawing | 2569–2756 |
+| app — photo editor | 2757–3296 |
+| app — persistence: files | 3297–3447 |
+| app — persistence: autosave (IndexedDB) | 3448–3536 |
+| app — export: CSV | 3537–3544 |
+| app — export: PDF (print) | 3545–3744 |
+| app — config panel | 3745–3932 |
+| app — office defaults (developer stub) | 3933–3947 |
+| app — keyboard, window events and init | 3948–4042 |
 
 ## 2. Modules
 
@@ -180,7 +181,7 @@ a photo cell target (`obs:<id>`, `gen:<id>`).
 | `emit(name, detail = {})` | Dispatch a custom event on `document`. |
 | `on(name, handler)` | Listen for a custom event (handler gets `detail`). |
 | `markDirty()` | Flag unsaved changes; emits `report:changed`. |
-| `checkpoint()` | Record an undo snapshot before a structural change. |
+| `checkpoint(snapshot)` | Record an undo snapshot before a structural change (default: now; pass one taken earlier to record a pre-change state). |
 | `beginTextEdit(key)` | Record one undo snapshot per text field edit session. |
 | `endTextEdit()` | End the text edit session (focusout). |
 | `undo()` | Undo the last change and re-render. |
@@ -281,8 +282,32 @@ a photo cell target (`obs:<id>`, `gen:<id>`).
 | `trackAspect(img, fig)` | Set `--ar` (width ÷ height) on `fig` whenever `img` loads, so capped photos narrow. |
 | `setPhotoImage(img, photo)` | Show original, then the flattened preview. |
 | `refreshPhotoCell(target)` | Re-render one photo cell. |
-| `dropBeforeId(cell, clientY) → string\|null` | Photo to insert before at a drop point. |
-| `bindPhotoEvents()` | Click, file input, drag/drop, paste, `photo:changed` listeners. |
+| `dropBeforeId(cell, x, y, skipId) → string\|null` | Photo to insert before at a point in the flow (reading order), ignoring `skipId`; null = end. |
+| `bindPhotoEvents()` | Click, file input, image file drop, paste, `photo:changed` listeners. |
+
+### app — photos: pointer drag
+
+One Pointer Events gesture for mouse, touch and pen (no HTML5 drag and drop for
+photos). Mouse: drag after `PHOTO_MOUSE_SLOP` px. Touch/pen: long-press
+`PHOTO_LONG_PRESS_MS` (400 ms) to pick up; moving more than
+`PHOTO_TOUCH_SLOP` px first is a scroll. While active, a non-passive
+`touchmove` listener stops page scrolling and the page auto-scrolls within
+`PHOTO_AUTOSCROLL_EDGE` px of the viewport edge. Gesture state lives in
+`photoDrag` (module variable).
+
+| Function | Description |
+| --- | --- |
+| `bindPhotoDrag()` | `pointerdown` on a photo (not its buttons) in an editable cell starts a gesture; blocks touch scroll and the long-press context menu while dragging. |
+| `photoPointerMove(e)` | Start the mouse drag, abandon a touch long-press that moved (scroll), or update an active drag. |
+| `startPhotoDrag()` | Pointer capture, `.dragging`, `.photo-ghost` image, short vibration on touch, Escape listener, auto-scroll loop. |
+| `updatePhotoDrag()` | Move the ghost; hit-test the cell under the pointer (`.drag-over`), compute `beforeId`, place the indicator. |
+| `showPhotoDropIndicator(cell, beforeId, skipId)` | `#drop-indicator` as a vertical bar in the gap before `beforeId` (after the last photo; a line in an empty cell). |
+| `hidePhotoDropIndicator()` | Hide `#drop-indicator` and reset its height. |
+| `autoScrollPhotoDrag()` | rAF loop: scroll near the top/bottom edge and re-hit-test. |
+| `photoDragKeydown(e)` | Escape cancels the drag. |
+| `photoPointerUp(e)` | End the gesture; drop into the cell under the pointer, if any. |
+| `endPhotoGesture()` | Clean up without changes (Escape, `pointercancel`, scroll, drop outside a cell). |
+| `dropPhoto(from, to, photoId, beforeId)` | `movePhoto()` between cell targets; one undo step when something moved; refresh both cells. |
 
 ### app — photos: flatten and markup drawing
 
@@ -528,7 +553,7 @@ Dispatched on `document` by `emit()`; `detail` is the payload.
 | css — header form | `.header-grid`, `.field`, `.chips`, `.chip`, `.disclaimer` |
 | css — general observations | `.gen-list`, `.gen-item`, `.autogrow` |
 | css — observation table | `.obs-table`, `.col-resizer`, `.cell-text`, `.item-cell`, `.pill*`, `.drag-handle`, `.hover-control`, `.drop-indicator` |
-| css — photos | `.photo-cell` (container for `cqw`), `.photo-flow` / `.pr-flow` (`.align-center`), `.photo` / `.pr-fig` (vars `--w`, `--cap-h`, `--ar`), `.photo-edit`, `.photo-remove`, `.photo-empty` |
+| css — photos | `.photo-ghost`, `.photo.dragging`, `.photo-cell.drag-over`, `.photo-cell` (container for `cqw`), `.photo-flow` / `.pr-flow` (`.align-center`), `.photo` / `.pr-fig` (vars `--w`, `--cap-h`, `--ar`), `.photo-edit`, `.photo-remove`, `.photo-empty` |
 | css — reminders | `.rem-group`, `.rem-table` |
 | css — popovers, dialogs, panel | `.popover`, `.menu-item`, `.swatch`, `.dlg`, `.config-panel`, `.toast`, `.busy` |
 | css — photo editor | `.pe`, `.pe-bar`, `.pe-btn`, `.pe-stage`, `.pe-text-input` |

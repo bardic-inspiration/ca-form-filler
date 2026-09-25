@@ -896,7 +896,12 @@ body.is-sorting { cursor: grabbing; user-select: none; }
   max-height: var(--cap-h); object-fit: contain; object-position: left top;
 }
 .photo-flow.align-center img, .pr-flow.align-center img { object-position: center top; }
+.photo-cell[tabindex] .photo { cursor: grab; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .photo.dragging { opacity: 0.4; }
+.photo-ghost {
+  position: fixed; left: 0; top: 0; z-index: 70; width: 96px; height: auto; pointer-events: none;
+  border-radius: 4px; opacity: 0.9; box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+}
 .photo-edit, .photo-remove {
   position: absolute; display: inline-flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; border: 0; border-radius: 50%; background: rgba(255,255,255,0.92);
@@ -1338,8 +1343,9 @@ function markDirty() {
   emit('report:changed', { dirty: true });
 }
 
-function checkpoint() {
-  state.history.record(snapshotReport(state.report));
+// Pass a snapshot taken earlier to record the state from before a change.
+function checkpoint(snapshot = snapshotReport(state.report)) {
+  state.history.record(snapshot);
   state.editKey = null;
 }
 
@@ -2288,7 +2294,7 @@ function photoCell(target, ids, { readOnly = false, compact = false } = {}) {
 function photoFigure(photo, readOnly, width = 100) {
   const img = h('img', { alt: photo.caption || photo.fileName || 'Photo', draggable: false });
   setPhotoImage(img, photo);
-  const fig = h('figure', { class: 'photo', dataset: { photoId: photo.id }, draggable: !readOnly }, img);
+  const fig = h('figure', { class: 'photo', dataset: { photoId: photo.id } }, img);
   fig.style.setProperty('--w', width);
   trackAspect(img, fig);
   if (!readOnly) {
@@ -2318,10 +2324,11 @@ function refreshPhotoCell(target) {
   if (cell && list) cell.replaceWith(photoCell(target, list, { compact: cell.classList.contains('compact') }));
 }
 
-function dropBeforeId(cell, clientY) {
-  const fig = $$('.photo', cell).find((f) => {
+// Insertion point in a photo flow: the first photo (in reading order) the point is before.
+function dropBeforeId(cell, x, y, skipId = null) {
+  const fig = $$('.photo', cell).filter((f) => f.dataset.photoId !== skipId).find((f) => {
     const r = f.getBoundingClientRect();
-    return clientY < r.top + r.height / 2;
+    return y < r.top || (y < r.bottom && x < r.left + r.width / 2);
   });
   return fig ? fig.dataset.photoId : null;
 }
@@ -2357,25 +2364,13 @@ function bindPhotoEvents() {
     const cell = e.target.closest('.photo-cell[tabindex]');
     state.hoverPhotoTarget = cell ? cell.dataset.target : null;
   });
-  page.addEventListener('dragstart', (e) => {
-    const fig = e.target.closest('.photo[draggable=true]');
-    if (!fig) return;
-    const from = fig.closest('.photo-cell').dataset.target;
-    e.dataTransfer.setData('application/x-wm-photo', JSON.stringify({ photoId: fig.dataset.photoId, from }));
-    e.dataTransfer.effectAllowed = 'move';
-    fig.classList.add('dragging');
-  });
-  page.addEventListener('dragend', (e) => {
-    const fig = e.target.closest('.photo');
-    if (fig) fig.classList.remove('dragging');
-  });
+  // Image files dropped from the desktop (photos themselves move by pointer drag).
   page.addEventListener('dragover', (e) => {
     const cell = e.target.closest('.photo-cell[tabindex]');
-    const types = e.dataTransfer.types;
-    if (!cell || !(types.includes('Files') || types.includes('application/x-wm-photo'))) return;
+    if (!cell || !e.dataTransfer.types.includes('Files')) return;
     e.preventDefault();
     e.stopPropagation();
-    e.dataTransfer.dropEffect = types.includes('Files') ? 'copy' : 'move';
+    e.dataTransfer.dropEffect = 'copy';
     $$('.photo-cell.drag-over').forEach((c) => c !== cell && c.classList.remove('drag-over'));
     cell.classList.add('drag-over');
   });
@@ -2389,23 +2384,8 @@ function bindPhotoEvents() {
     e.preventDefault();
     e.stopPropagation();
     cell.classList.remove('drag-over');
-    const target = cell.dataset.target;
-    const beforeId = dropBeforeId(cell, e.clientY);
-    const moved = e.dataTransfer.getData('application/x-wm-photo');
-    if (moved) {
-      const { photoId, from } = JSON.parse(moved);
-      const src = photoList(from);
-      const dest = photoList(target);
-      if (!src || !dest || photoId === beforeId) return;
-      checkpoint();
-      src.splice(src.indexOf(photoId), 1);
-      const at = beforeId ? dest.indexOf(beforeId) : -1;
-      if (at < 0) dest.push(photoId); else dest.splice(at, 0, photoId);
-      markDirty();
-      refreshPhotoCell(from);
-      if (from !== target) refreshPhotoCell(target);
-    } else if (e.dataTransfer.files.length) {
-      addPhotosTo(target, e.dataTransfer.files, beforeId);
+    if (e.dataTransfer.files.length) {
+      addPhotosTo(cell.dataset.target, e.dataTransfer.files, dropBeforeId(cell, e.clientX, e.clientY));
     }
   });
   document.addEventListener('paste', (e) => {
@@ -2422,6 +2402,168 @@ function bindPhotoEvents() {
     const photo = state.report.photos[photoId];
     if (photo) $$(`.photo[data-photo-id="${photoId}"] img`).forEach((img) => setPhotoImage(img, photo));
   });
+}
+
+/* ==== SECTION: app — photos: pointer drag ==== */
+
+// One pointer-events drag for mouse, touch and pen. Mouse: drag after a small
+// move. Touch/pen: long-press to pick up; moving first scrolls the page.
+const PHOTO_LONG_PRESS_MS = 400;
+const PHOTO_TOUCH_SLOP = 8;
+const PHOTO_MOUSE_SLOP = 5;
+const PHOTO_AUTOSCROLL_EDGE = 80;
+
+// Current gesture: { pointerId, pointerType, fig, from, photoId, startX, startY,
+// x, y, active, timer, raf, ghost, cell, beforeId }, or null.
+let photoDrag = null;
+
+function bindPhotoDrag() {
+  const page = $('.page');
+  page.addEventListener('pointerdown', (e) => {
+    if (photoDrag || e.button > 0 || !e.isPrimary) return;
+    const fig = e.target.closest('.photo');
+    const cell = fig && fig.closest('.photo-cell[tabindex]');
+    if (!cell || e.target.closest('button')) return;
+    photoDrag = {
+      pointerId: e.pointerId, pointerType: e.pointerType, fig, from: cell.dataset.target, photoId: fig.dataset.photoId,
+      startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, active: false, timer: null,
+    };
+    if (e.pointerType === 'mouse') e.preventDefault();
+    else photoDrag.timer = setTimeout(startPhotoDrag, PHOTO_LONG_PRESS_MS);
+    document.addEventListener('pointermove', photoPointerMove);
+    document.addEventListener('pointerup', photoPointerUp);
+    document.addEventListener('pointercancel', endPhotoGesture);
+  });
+  // Once a touch drag is active, keep the page from scrolling under it.
+  document.addEventListener('touchmove', (e) => { if (photoDrag && photoDrag.active) e.preventDefault(); }, { passive: false });
+  // A long-press would otherwise open the image context menu.
+  page.addEventListener('contextmenu', (e) => { if (photoDrag && e.target.closest('.photo')) e.preventDefault(); });
+}
+
+function photoPointerMove(e) {
+  const d = photoDrag;
+  if (!d || e.pointerId !== d.pointerId) return;
+  d.x = e.clientX;
+  d.y = e.clientY;
+  if (d.active) {
+    e.preventDefault();
+    updatePhotoDrag();
+    return;
+  }
+  const moved = Math.hypot(d.x - d.startX, d.y - d.startY);
+  if (d.pointerType === 'mouse') { if (moved > PHOTO_MOUSE_SLOP) startPhotoDrag(); }
+  else if (moved > PHOTO_TOUCH_SLOP) endPhotoGesture();
+}
+
+function startPhotoDrag() {
+  const d = photoDrag;
+  if (!d || d.active) return;
+  clearTimeout(d.timer);
+  if (!d.fig.isConnected) { endPhotoGesture(); return; }
+  d.active = true;
+  try {
+    d.fig.setPointerCapture(d.pointerId);
+  } catch (err) {
+    // Silent: the pointer is already gone; pointerup/cancel ends the gesture.
+  }
+  d.fig.classList.add('dragging');
+  document.body.classList.add('is-sorting');
+  const img = $('img', d.fig);
+  d.ghost = h('img', { class: 'photo-ghost', src: img.currentSrc || img.src, alt: '' });
+  document.body.append(d.ghost);
+  if (d.pointerType !== 'mouse' && navigator.vibrate) navigator.vibrate(15);
+  document.addEventListener('keydown', photoDragKeydown, true);
+  d.raf = requestAnimationFrame(autoScrollPhotoDrag);
+  updatePhotoDrag();
+}
+
+function updatePhotoDrag() {
+  const d = photoDrag;
+  d.ghost.style.transform = `translate(${d.x}px, ${d.y}px) translate(-50%, calc(-100% - 12px))`;
+  const el = document.elementFromPoint(d.x, d.y);
+  const cell = el && el.closest('.photo-cell[tabindex]');
+  if (d.cell && d.cell !== cell) d.cell.classList.remove('drag-over');
+  d.cell = cell;
+  if (!cell) { hidePhotoDropIndicator(); return; }
+  cell.classList.add('drag-over');
+  d.beforeId = dropBeforeId(cell, d.x, d.y, d.photoId);
+  showPhotoDropIndicator(cell, d.beforeId, d.photoId);
+}
+
+// A vertical bar in the gap before `beforeId` (after the last photo when null).
+function showPhotoDropIndicator(cell, beforeId, skipId) {
+  const figs = $$('.photo', cell).filter((f) => f.dataset.photoId !== skipId);
+  let box;
+  if (!figs.length) {
+    const r = cell.getBoundingClientRect();
+    box = { left: r.left + 8, top: r.top + 8, width: r.width - 16, height: 3 };
+  } else {
+    const fig = beforeId ? figs.find((f) => f.dataset.photoId === beforeId) : figs[figs.length - 1];
+    const r = fig.getBoundingClientRect();
+    box = { left: (beforeId ? r.left - 4 : r.right + 1), top: r.top, width: 3, height: r.height };
+  }
+  Object.assign($('#drop-indicator').style, {
+    display: 'block', left: box.left + 'px', top: box.top + 'px', width: box.width + 'px', height: box.height + 'px',
+  });
+}
+
+function hidePhotoDropIndicator() {
+  Object.assign($('#drop-indicator').style, { display: 'none', height: '' });
+}
+
+function autoScrollPhotoDrag() {
+  const d = photoDrag;
+  if (!d || !d.active) return;
+  const edge = PHOTO_AUTOSCROLL_EDGE;
+  let dy = 0;
+  if (d.y < edge) dy = -Math.ceil((edge - d.y) / 5);
+  else if (d.y > innerHeight - edge) dy = Math.ceil((d.y - innerHeight + edge) / 5);
+  if (dy) { scrollBy(0, dy); updatePhotoDrag(); }
+  d.raf = requestAnimationFrame(autoScrollPhotoDrag);
+}
+
+function photoDragKeydown(e) {
+  if (e.key !== 'Escape') return;
+  e.preventDefault();
+  e.stopPropagation();
+  endPhotoGesture();
+}
+
+function photoPointerUp(e) {
+  const d = photoDrag;
+  if (!d || e.pointerId !== d.pointerId) return;
+  endPhotoGesture();
+  if (d.active && d.cell) dropPhoto(d.from, d.cell.dataset.target, d.photoId, d.beforeId);
+}
+
+// Ends the gesture without changes (also Escape, pointercancel, or a scroll).
+function endPhotoGesture() {
+  const d = photoDrag;
+  if (!d) return;
+  photoDrag = null;
+  clearTimeout(d.timer);
+  cancelAnimationFrame(d.raf);
+  document.removeEventListener('pointermove', photoPointerMove);
+  document.removeEventListener('pointerup', photoPointerUp);
+  document.removeEventListener('pointercancel', endPhotoGesture);
+  document.removeEventListener('keydown', photoDragKeydown, true);
+  if (d.ghost) d.ghost.remove();
+  if (d.cell) d.cell.classList.remove('drag-over');
+  d.fig.classList.remove('dragging');
+  document.body.classList.remove('is-sorting');
+  hidePhotoDropIndicator();
+}
+
+function dropPhoto(from, to, photoId, beforeId) {
+  const src = photoList(from);
+  const dest = photoList(to);
+  if (!src || !dest) return;
+  const before = snapshotReport(state.report);
+  if (!movePhoto(src, dest, photoId, beforeId)) return;
+  checkpoint(before);
+  markDirty();
+  refreshPhotoCell(from);
+  if (to !== from) refreshPhotoCell(to);
 }
 
 /* ==== SECTION: app — photos: flatten and markup drawing ==== */
@@ -3885,6 +4027,7 @@ function init() {
   buildEditorToolbar();
   bindGlobalEvents();
   bindPhotoEvents();
+  bindPhotoDrag();
   bindPrintEvents();
   loadReport(createReport());
   showEnvironmentNotice();
