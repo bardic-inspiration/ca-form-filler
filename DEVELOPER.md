@@ -302,7 +302,7 @@ photos). Mouse: drag after `PHOTO_MOUSE_SLOP` px. Touch/pen: long-press
 | `photoPointerMove(e)` | Start the mouse drag, abandon a touch long-press that moved (scroll), or update an active drag. |
 | `startPhotoDrag()` | Pointer capture, `.dragging`, `.photo-ghost` image, short vibration on touch, Escape listener, auto-scroll loop. |
 | `updatePhotoDrag()` | Move the ghost; hit-test the cell under the pointer (`.drag-over`), compute `beforeId`, place the indicator. |
-| `showPhotoDropIndicator(cell, beforeId, skipId)` | `#drop-indicator` as a vertical bar in the gap before `beforeId` (after the last photo; a line in an empty cell). |
+| `showPhotoDropIndicator(cell, beforeId, skipId)` | `#drop-indicator` as a vertical bar on the edge of `beforeId` (after the last photo; a line in an empty cell). |
 | `hidePhotoDropIndicator()` | Hide `#drop-indicator` and reset its height. |
 | `autoScrollPhotoDrag()` | rAF loop: scroll near the top/bottom edge and re-hit-test. |
 | `photoDragKeydown(e)` | Escape cancels the drag. |

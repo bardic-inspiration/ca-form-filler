@@ -899,7 +899,7 @@ body.is-sorting { cursor: grabbing; user-select: none; }
 .photo-cell[tabindex] .photo { cursor: grab; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .photo.dragging { opacity: 0.4; }
 .photo-ghost {
-  position: fixed; left: 0; top: 0; z-index: 70; width: 96px; height: auto; pointer-events: none;
+  position: fixed; left: 0; top: 0; z-index: 45; width: 96px; height: auto; pointer-events: none;
   border-radius: 4px; opacity: 0.9; box-shadow: 0 6px 18px rgba(0,0,0,0.35);
 }
 .photo-edit, .photo-remove {
@@ -2519,7 +2519,7 @@ function updatePhotoDrag() {
   showPhotoDropIndicator(cell, d.beforeId, d.photoId);
 }
 
-// A vertical bar in the gap before `beforeId` (after the last photo when null).
+// A vertical bar on the left edge of `beforeId` (right edge of the last photo when null).
 function showPhotoDropIndicator(cell, beforeId, skipId) {
   const figs = $$('.photo', cell).filter((f) => f.dataset.photoId !== skipId);
   let box;
@@ -2529,7 +2529,7 @@ function showPhotoDropIndicator(cell, beforeId, skipId) {
   } else {
     const fig = beforeId ? figs.find((f) => f.dataset.photoId === beforeId) : figs[figs.length - 1];
     const r = fig.getBoundingClientRect();
-    box = { left: (beforeId ? r.left - 4 : r.right + 1), top: r.top, width: 3, height: r.height };
+    box = { left: (beforeId ? r.left : r.right) - 2, top: r.top - 4, width: 4, height: r.height + 8 };
   }
   Object.assign($('#drop-indicator').style, {
     display: 'block', left: box.left + 'px', top: box.top + 'px', width: box.width + 'px', height: box.height + 'px',
