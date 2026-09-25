@@ -110,6 +110,10 @@ Settings are saved with each report and apply right away.
 
 ## 9. Troubleshooting
 
+- **On a phone, nothing happens when adding photos or exporting.** The file
+  is probably open in another app's viewer (for example the Files app), which
+  can't choose files or print. The tool shows a message when this happens.
+  Open the file with **Chrome** instead: ⋮ → Open with → Chrome.
 - **The PDF font looks different.** The report uses Franklin Gothic. If it
   isn't installed on your computer, a similar font is used instead.
 - **Save downloads a copy instead of updating the file.** Some browsers or

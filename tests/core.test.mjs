@@ -268,3 +268,13 @@ test('office defaults export and import config plus tags', () => {
   deepEq(plain(other.tags), plain(r.tags));
   assert.throws(() => Core.applyOfficeDefaults(other, JSON.stringify({ app: 'WM-FieldReport' })), /office defaults/);
 });
+
+test('detects Android embedded WebViews but not Chrome itself', () => {
+  const webview = 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/AP2A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/129.0.6668.100 Mobile Safari/537.36';
+  const chrome = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36';
+  const desktop = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.0.0';
+  assert.equal(Core.isEmbeddedWebView(webview), true);
+  assert.equal(Core.isEmbeddedWebView(chrome), false);
+  assert.equal(Core.isEmbeddedWebView(desktop), false);
+  assert.equal(Core.isEmbeddedWebView(''), false);
+});

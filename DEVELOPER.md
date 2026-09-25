@@ -9,43 +9,43 @@ ranges, functions, events); `node tools/lint.mjs --file-map` prints table 1.
 | Section | Lines |
 | --- | --- |
 | core — config defaults | 14–72 |
-| core — utilities | 73–119 |
-| core — report model | 120–190 |
-| core — numbering | 191–213 |
-| core — inheritance | 214–263 |
-| core — tags and filters | 264–292 |
-| core — undo history | 293–334 |
-| core — file formats | 335–462 |
-| css — tokens and base | 463–514 |
-| css — toolbar and page | 515–543 |
-| css — header form | 544–575 |
-| css — general observations | 576–588 |
-| css — observation table | 589–645 |
-| css — photos | 646–671 |
-| css — reminders | 672–679 |
-| css — popovers, dialogs, panel | 680–743 |
-| css — photo editor | 744–776 |
-| css — responsive | 777–806 |
-| css — print | 807–867 |
-| markup — shell | 868–905 |
-| app — dom helpers and icons | 906–1017 |
-| app — state and events | 1018–1106 |
-| app — dialogs and popovers | 1107–1182 |
-| app — render: toolbar and header | 1183–1376 |
-| app — render: general observations | 1377–1432 |
-| app — render: observations table | 1433–1641 |
-| app — render: filters and reminders | 1642–1733 |
-| app — sorting and column resize | 1734–1822 |
-| app — photos: import, cells, drag and drop | 1823–2028 |
-| app — photos: flatten and markup drawing | 2029–2216 |
-| app — photo editor | 2217–2756 |
-| app — persistence: files | 2757–2899 |
-| app — persistence: autosave (IndexedDB) | 2900–2985 |
-| app — export: CSV | 2986–2993 |
-| app — export: PDF (print) | 2994–3169 |
-| app — config panel | 3170–3350 |
-| app — office defaults (developer stub) | 3351–3365 |
-| app — keyboard, window events and init | 3366–3444 |
+| core — utilities | 73–126 |
+| core — report model | 127–197 |
+| core — numbering | 198–220 |
+| core — inheritance | 221–270 |
+| core — tags and filters | 271–299 |
+| core — undo history | 300–341 |
+| core — file formats | 342–469 |
+| css — tokens and base | 470–521 |
+| css — toolbar and page | 522–554 |
+| css — header form | 555–586 |
+| css — general observations | 587–599 |
+| css — observation table | 600–656 |
+| css — photos | 657–682 |
+| css — reminders | 683–690 |
+| css — popovers, dialogs, panel | 691–754 |
+| css — photo editor | 755–787 |
+| css — responsive | 788–817 |
+| css — print | 818–878 |
+| markup — shell | 879–917 |
+| app — dom helpers and icons | 918–1068 |
+| app — state and events | 1069–1158 |
+| app — dialogs and popovers | 1159–1234 |
+| app — render: toolbar and header | 1235–1428 |
+| app — render: general observations | 1429–1484 |
+| app — render: observations table | 1485–1693 |
+| app — render: filters and reminders | 1694–1785 |
+| app — sorting and column resize | 1786–1874 |
+| app — photos: import, cells, drag and drop | 1875–2080 |
+| app — photos: flatten and markup drawing | 2081–2268 |
+| app — photo editor | 2269–2808 |
+| app — persistence: files | 2809–2951 |
+| app — persistence: autosave (IndexedDB) | 2952–3037 |
+| app — export: CSV | 3038–3045 |
+| app — export: PDF (print) | 3046–3230 |
+| app — config panel | 3231–3411 |
+| app — office defaults (developer stub) | 3412–3426 |
+| app — keyboard, window events and init | 3427–3506 |
 
 ## 2. Modules
 
@@ -64,6 +64,7 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `formatDate(iso) → string` | `YYYY-MM-DD` → `M/D/YYYY`. |
 | `toLetters(n) → string` | 1 → A, 27 → AA. |
 | `moveById(list, id, beforeId) → list` | Move item `id` before `beforeId` (end when null), in place. |
+| `isEmbeddedWebView(userAgent) → boolean` | Android WebView (`; wv)`): pickers, print and downloads may be ignored. |
 
 ### core — report model
 
@@ -137,6 +138,9 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `readFileAsText(file) → Promise<string>` | File text. |
 | `readFileAsDataURL(file) → Promise<string>` | File as data URL. |
 | `downloadBlob(name, blob)` | Trigger a download. |
+| `expectBrowserWindow(timeoutMs, onMissing) → mark()` | Call `onMissing` if no blur/visibility change (picker or print window) within the timeout. |
+| `openFilePicker(input)` | `showPicker()` (fallback `click()`); toast if no picker appears. |
+| `showEnvironmentNotice()` | Show `#notice` banner inside embedded WebViews. |
 | `safeLocalGet(key) → string\|null` | localStorage read, never throws. |
 | `safeLocalSet(key, value)` | localStorage write, never throws. |
 
@@ -335,8 +339,8 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `renderPrint(urlFor)` | Build `#print-root` from the report. |
 | `preparePrint() → Promise` | Flatten photos, build print DOM, wait for image decode. |
 | `showPrintTip() → Promise<boolean>` | One-time print settings tip. |
-| `exportPDF()` | Tip, prepare, set `document.title`, `window.print()`. |
-| `bindPrintEvents()` | `beforeprint` fallback build, `afterprint` reset. |
+| `exportPDF()` | Tip, prepare, set `document.title`, `window.print()`; explains if no print window opened. |
+| `bindPrintEvents()` | `beforeprint` sets `printOpened` and builds when needed, `afterprint` reset. |
 
 ### app — config panel
 
@@ -365,7 +369,7 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | Function | Description |
 | --- | --- |
 | `bindGlobalEvents()` | Shortcuts, unload warning, autosave triggers, JSON drop, event listeners. |
-| `init()` | Build UI, load a blank report, set `data-ready`, offer recovery. |
+| `init()` | Build UI, load a blank report, WebView notice, set `data-ready`, offer recovery. |
 
 ## 3. State
 
@@ -398,7 +402,7 @@ original px \| null), `markup[]` (§9), `caption`, `fileName`.
 
 App-only `state`: `fileHandle`, `fileName`, `dirty`, `changeCount`,
 `autosavedCount`, `history`, `editKey`, `filter`, `autosaveTimer`,
-`printPrepared`, `pendingPhotoTarget`, `hoverPhotoTarget`.
+`printPrepared`, `printOpened`, `pendingPhotoTarget`, `hoverPhotoTarget`.
 
 ## 4. Config
 
@@ -445,7 +449,7 @@ Dispatched on `document` by `emit()`; `detail` is the payload.
 | Autosave record | `{ savedAt, dirty, fileName, fileHandle, json }` |
 | localStorage | `wm-field-report:print-tip-shown` |
 | File System Access | `showOpenFilePicker` / `showSaveFilePicker`; handle kept in `state.fileHandle` (and in the autosave record); Save writes via `createWritable()` |
-| Fallback | `#file-json` input for Open; `downloadBlob()` for Save (Save As prompts for a name) |
+| Fallback | `#file-json` input (opened by `openFilePicker()`) for Open; `downloadBlob()` for Save (Save As prompts for a name) |
 
 ## 7. Rendering
 
