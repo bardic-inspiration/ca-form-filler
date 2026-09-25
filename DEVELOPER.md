@@ -21,39 +21,39 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 | core — messages and debug log | 587–735 |
 | css — tokens and base | 736–787 |
 | css — toolbar and page | 788–820 |
-| css — header form | 821–852 |
-| css — general observations | 853–865 |
-| css — observation table | 866–927 |
-| css — photos | 928–1003 |
-| css — reminders | 1004–1011 |
-| css — popovers, dialogs, panel | 1012–1088 |
-| css — photo editor | 1089–1121 |
-| css — responsive | 1122–1155 |
-| css — print | 1156–1217 |
-| markup — shell | 1218–1257 |
-| app — dom helpers and icons | 1258–1408 |
-| app — state and events | 1409–1503 |
-| app — dialogs and popovers | 1504–1582 |
-| app — floating toolbar | 1583–1630 |
-| app — notify: messages and debug log | 1631–1703 |
-| app — render: toolbar and header | 1704–1897 |
-| app — render: general observations | 1898–1953 |
-| app — render: observations table | 1954–2162 |
-| app — render: filters and reminders | 2163–2254 |
-| app — sorting and column resize | 2255–2344 |
-| app — photos: import, cells, drag and drop | 2345–2550 |
-| app — photos: pointer drag | 2551–2713 |
-| app — photos: selection, resize and cell menu | 2714–2852 |
-| app — photos: in-cell crop and rotate | 2853–2979 |
-| app — photos: flatten and markup drawing | 2980–3182 |
-| app — photo editor | 3183–3715 |
-| app — persistence: files | 3716–3866 |
-| app — persistence: autosave (IndexedDB) | 3867–3955 |
-| app — export: CSV | 3956–3963 |
-| app — export: PDF (print) | 3964–4163 |
-| app — config panel | 4164–4351 |
-| app — office defaults (developer stub) | 4352–4366 |
-| app — keyboard, window events and init | 4367–4467 |
+| css — header form | 821–853 |
+| css — general observations | 854–866 |
+| css — observation table | 867–928 |
+| css — photos | 929–1004 |
+| css — reminders | 1005–1012 |
+| css — popovers, dialogs, panel | 1013–1089 |
+| css — photo editor | 1090–1122 |
+| css — responsive | 1123–1156 |
+| css — print | 1157–1218 |
+| markup — shell | 1219–1258 |
+| app — dom helpers and icons | 1259–1409 |
+| app — state and events | 1410–1504 |
+| app — dialogs and popovers | 1505–1583 |
+| app — floating toolbar | 1584–1631 |
+| app — notify: messages and debug log | 1632–1704 |
+| app — render: toolbar and header | 1705–1898 |
+| app — render: general observations | 1899–1954 |
+| app — render: observations table | 1955–2163 |
+| app — render: filters and reminders | 2164–2255 |
+| app — sorting and column resize | 2256–2345 |
+| app — photos: import, cells, drag and drop | 2346–2551 |
+| app — photos: pointer drag | 2552–2714 |
+| app — photos: selection, resize and cell menu | 2715–2853 |
+| app — photos: in-cell crop and rotate | 2854–2980 |
+| app — photos: flatten and markup drawing | 2981–3183 |
+| app — photo editor | 3184–3716 |
+| app — persistence: files | 3717–3867 |
+| app — persistence: autosave (IndexedDB) | 3868–3956 |
+| app — export: CSV | 3957–3964 |
+| app — export: PDF (print) | 3965–4164 |
+| app — config panel | 4165–4352 |
+| app — office defaults (developer stub) | 4353–4367 |
+| app — keyboard, window events and init | 4368–4468 |
 
 ## 2. Modules
 
