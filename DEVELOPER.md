@@ -9,46 +9,47 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 
 | Section | Lines |
 | --- | --- |
-| core — config defaults | 14–72 |
-| core — utilities | 73–126 |
-| core — report model | 127–197 |
-| core — numbering | 198–220 |
-| core — inheritance | 221–270 |
-| core — tags and filters | 271–299 |
-| core — undo history | 300–341 |
-| core — file formats | 342–456 |
-| core — messages and debug log | 457–603 |
-| css — tokens and base | 604–655 |
-| css — toolbar and page | 656–688 |
-| css — header form | 689–720 |
-| css — general observations | 721–733 |
-| css — observation table | 734–790 |
-| css — photos | 791–816 |
-| css — reminders | 817–824 |
-| css — popovers, dialogs, panel | 825–888 |
-| css — photo editor | 889–921 |
-| css — responsive | 922–951 |
-| css — print | 952–1012 |
-| markup — shell | 1013–1051 |
-| app — dom helpers and icons | 1052–1202 |
-| app — state and events | 1203–1293 |
-| app — dialogs and popovers | 1294–1372 |
-| app — notify: messages and debug log | 1373–1445 |
-| app — render: toolbar and header | 1446–1639 |
-| app — render: general observations | 1640–1695 |
-| app — render: observations table | 1696–1904 |
-| app — render: filters and reminders | 1905–1996 |
-| app — sorting and column resize | 1997–2085 |
-| app — photos: import, cells, drag and drop | 2086–2291 |
-| app — photos: flatten and markup drawing | 2292–2479 |
-| app — photo editor | 2480–3019 |
-| app — persistence: files | 3020–3170 |
-| app — persistence: autosave (IndexedDB) | 3171–3259 |
-| app — export: CSV | 3260–3267 |
-| app — export: PDF (print) | 3268–3451 |
-| app — config panel | 3452–3636 |
-| app — office defaults (developer stub) | 3637–3651 |
-| app — keyboard, window events and init | 3652–3744 |
+| core — config defaults | 14–79 |
+| core — utilities | 80–133 |
+| core — report model | 134–204 |
+| core — numbering | 205–227 |
+| core — inheritance | 228–277 |
+| core — tags and filters | 278–306 |
+| core — photo display | 307–371 |
+| core — undo history | 372–422 |
+| core — file formats | 423–541 |
+| core — messages and debug log | 542–689 |
+| css — tokens and base | 690–741 |
+| css — toolbar and page | 742–774 |
+| css — header form | 775–806 |
+| css — general observations | 807–819 |
+| css — observation table | 820–876 |
+| css — photos | 877–902 |
+| css — reminders | 903–910 |
+| css — popovers, dialogs, panel | 911–974 |
+| css — photo editor | 975–1007 |
+| css — responsive | 1008–1037 |
+| css — print | 1038–1098 |
+| markup — shell | 1099–1137 |
+| app — dom helpers and icons | 1138–1288 |
+| app — state and events | 1289–1379 |
+| app — dialogs and popovers | 1380–1458 |
+| app — notify: messages and debug log | 1459–1531 |
+| app — render: toolbar and header | 1532–1725 |
+| app — render: general observations | 1726–1781 |
+| app — render: observations table | 1782–1990 |
+| app — render: filters and reminders | 1991–2082 |
+| app — sorting and column resize | 2083–2171 |
+| app — photos: import, cells, drag and drop | 2172–2377 |
+| app — photos: flatten and markup drawing | 2378–2565 |
+| app — photo editor | 2566–3105 |
+| app — persistence: files | 3106–3256 |
+| app — persistence: autosave (IndexedDB) | 3257–3345 |
+| app — export: CSV | 3346–3353 |
+| app — export: PDF (print) | 3354–3537 |
+| app — config panel | 3538–3722 |
+| app — office defaults (developer stub) | 3723–3737 |
+| app — keyboard, window events and init | 3738–3830 |
 
 ## 2. Modules
 
@@ -75,7 +76,7 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | --- | --- |
 | `createReport(options = {}) → report` | New report; `options.config`, `options.tags`, `options.today`. |
 | `createObservation(report) → Observation` | Blank observation for the current report number. |
-| `createGeneralObservation() → object` | `{ id, text, images }`. |
+| `createGeneralObservation() → object` | `{ id, text, images, display }`. |
 | `createPhoto(dataUrl, fileName) → Photo` | Photo record with no crop or markup. |
 | `setStatus(item, status, date) → item` | Set complete (with date) or incomplete (clears date). |
 | `reportTitle(report) → string` | "Field Observation Report 01". |
@@ -105,13 +106,29 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `matchesFilter(item, filter) → boolean` | Screen filter test (`status`, any of `tagIds`). |
 | `printColumnWidths(report) → number[]` | PDF column widths (template or on-screen). |
 
+### core — photo display
+
+Cell `kind` is `obs` (table row) or `gen` (general observation), the prefix of
+a photo cell target (`obs:<id>`, `gen:<id>`).
+
+| Function | Description |
+| --- | --- |
+| `validPhotoWidth(value) → number\|null` | A number in 10–100 (rounded), else null. |
+| `snapPhotoWidth(pct) → number` | Clamp to 10–100; snap to `PHOTO_WIDTH_STEPS` within `PHOTO_WIDTH_SNAP` (4) %. |
+| `cellDisplay(display, kind) → { photoWidth, photoAlign }` | Cell defaults: 100 %, `left` (table) or `center` (general). |
+| `effectivePhotoWidth(photo, cell) → number` | `photo.display.width` if valid, else the cell's `photoWidth`. |
+| `photoMaxHeightIn(config, kind) → number` | `photoMaxHeightTable` / `photoMaxHeightGeneral`, clamped to 1–6 in. |
+| `printPhotoCellWidthIn(report, kind) → number` | Photo cell content width in the PDF (inches; mirrors css — print). |
+| `photoLayout(report, kind, display, ids) → { align, maxHeightIn, photos: [{ id, width }] }` | Layout of one photo cell, shared by screen and print. |
+| `movePhoto(src, dest, photoId, beforeId) → boolean` | Move an id between (or within) photo lists; false when nothing changed. |
+
 ### core — undo history
 
 | Function | Description |
 | --- | --- |
 | `History` | Class: `record(snapshot)`, `undo(current)`, `redo(current)`, `canUndo()`, `canRedo()`, `clear()`; limit `HISTORY_LIMIT` (100). |
-| `snapshotReport(report) → string` | JSON of `SNAPSHOT_KEYS` (excludes photos, config, ui). |
-| `restoreSnapshot(report, snapshot) → report` | Apply a snapshot in place and renumber. |
+| `snapshotReport(report) → string` | JSON of `SNAPSHOT_KEYS` plus `photoDisplay` (each photo's `display`); excludes photos, config, ui. |
+| `restoreSnapshot(report, snapshot) → report` | Apply a snapshot in place (including photo `display`) and renumber. |
 
 ### core — file formats
 
@@ -122,7 +139,7 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `serializeReport(report) → string` | Renumber, drop unreferenced photos, JSON. |
 | `migrate(data) → data` | Schema upgrade hook (no steps yet). |
 | `normalizeItem(item, report) → Observation` | Fill missing observation fields. |
-| `normalizeReport(data) → report` | Fill defaults for every report field. |
+| `normalizeReport(data) → report` | Fill defaults for every report field (empty `display` objects on older files). |
 | `parseReport(json) → report` | Validate `app`/`schemaVersion`, migrate, normalize. Throws user-facing errors. |
 | `csvField(value) → string` | RFC 4180 quoting. |
 | `toCSV(report) → string` | BOM + CRLF CSV, current items then inherited. |
@@ -408,7 +425,7 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `header.visitDate`, `header.reportDate` | ISO date | today |
 | `header.attendees`, `header.distribution` | string[] | `[]` |
 | `disclaimer` | string | `config.disclaimer` |
-| `generalObservations[]` | `{ id, text, images: photoId[] }` | `[]` |
+| `generalObservations[]` | `{ id, text, images: photoId[], display }` | `[]` |
 | `observations[]` | Observation | `[]` |
 | `inherited[]` | Observation + `sourceReport`, `originalNumber` | `[]` |
 | `tags[]` | `{ id, name, color }` (color = `TAG_COLORS` key) | `[]` |
@@ -417,11 +434,18 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `ui.columnWidths` | number[4] (%) | `[8, 36, 32, 24]` |
 
 Observation: `id` (UUID), `number` (string), `description`, `requirement`,
-`photoIds[]`, `display` (`{}`), `status` (`incomplete`\|`complete`),
+`photoIds[]`, `display`, `status` (`incomplete`\|`complete`),
 `completedDate` (ISO\|null), `tagIds[]`, `createdInReport` (number).
 
+Cell `display` (observation and general observation; `{}` = defaults, see
+`cellDisplay()`): `photoWidth` (10–100 %, the menu offers 25/50/75/100;
+default 100), `photoAlign` (`left`\|`center`; default `left` in the table,
+`center` in general observations).
+
 Photo: `id`, `original` (JPEG data URL, ≤ 1600 px), `crop` (`{x, y, w, h}`
-original px \| null), `markup[]` (§9), `caption`, `fileName`.
+original px \| null), `markup[]` (§9), `caption`, `fileName`, `display`
+(`{ width }`: optional width override, 10–100 % of its cell; moves with the
+photo between cells).
 
 App-only `state`: `fileHandle`, `fileName`, `dirty`, `changeCount`,
 `autosavedCount`, `history`, `editKey`, `filter`, `autosaveTimer`,
@@ -442,6 +466,8 @@ App-only `state`: `fileHandle`, `fileName`, `dirty`, `changeCount`,
 | `pdfShowReminders` | boolean | `true` | `renderPrint()` |
 | `photoExportMaxSide` | number (400–1200) | `600` | `preparePrint()`, `bindPrintEvents()` |
 | `photoExportQuality` | number | `0.8` | `preparePrint()` |
+| `photoMaxHeightTable` | number (1–6 in) | `2` | `photoMaxHeightIn()` |
+| `photoMaxHeightGeneral` | number (1–6 in) | `4` | `photoMaxHeightIn()` |
 | `markupColor` | hex | `#F26A21` | `openPhotoEditor()` |
 | `disclaimer` | string | template text | `createReport()`, `renderDisclaimer()` |
 | `logo` | data URL \| null | `null` (= `DEFAULT_LOGO`) | `renderPrint()`, `logoEditor()` |
@@ -451,7 +477,9 @@ App-only `state`: `fileHandle`, `fileName`, `dirty`, `changeCount`,
 
 Other constants: `APP_ID`, `DEFAULTS_APP_ID`, `SCHEMA_VERSION`,
 `DEFAULT_COLUMN_WIDTHS`, `PDF_COLUMN_WIDTHS` (`[8, 38, 33, 21]`),
-`PHOTO_UPLOAD_MAX_SIDE`, `PHOTO_UPLOAD_QUALITY`, `HISTORY_LIMIT`,
+`PHOTO_UPLOAD_MAX_SIDE`, `PHOTO_UPLOAD_QUALITY`, `PHOTO_WIDTH_STEPS`,
+`PHOTO_WIDTH_MIN`, `PHOTO_WIDTH_SNAP`, `PHOTO_MAX_HEIGHT_RANGE`,
+`PRINT_CONTENT_WIDTH_IN`, `HISTORY_LIMIT`,
 `TAG_COLORS`, `NUMBERING_PRESETS`, `CSV_COLUMNS`, `SNAPSHOT_KEYS`,
 `MESSAGES`, `LOG_CODES`, `DEBUG_LOG_LIMIT`, `DEBUG_DETAIL_MAX`,
 `OPEN_IN_BROWSER_HELP`, `SEND_DEBUG_HELP`.

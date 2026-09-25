@@ -35,6 +35,8 @@ const DEFAULT_CONFIG = {
   pdfShowReminders: true,
   photoExportMaxSide: 600,
   photoExportQuality: 0.8,
+  photoMaxHeightTable: 2, // inches, 1–6
+  photoMaxHeightGeneral: 4, // inches, 1–6
   markupColor: '#F26A21',
   disclaimer: DEFAULT_DISCLAIMER,
   logo: null, // null = DEFAULT_LOGO
@@ -50,6 +52,11 @@ const DEFAULT_COLUMN_WIDTHS = [8, 36, 32, 24];
 const PDF_COLUMN_WIDTHS = [8, 38, 33, 21];
 const PHOTO_UPLOAD_MAX_SIDE = 1600;
 const PHOTO_UPLOAD_QUALITY = 0.85;
+const PHOTO_WIDTH_STEPS = [25, 50, 75, 100]; // % of the photo cell
+const PHOTO_WIDTH_MIN = 10;
+const PHOTO_WIDTH_SNAP = 4; // snap to a step within this many %
+const PHOTO_MAX_HEIGHT_RANGE = [1, 6]; // inches
+const PRINT_CONTENT_WIDTH_IN = 6.5; // Letter minus 1in side margins
 const HISTORY_LIMIT = 100;
 
 const TAG_COLORS = {
@@ -173,11 +180,11 @@ function createObservation(report) {
 }
 
 function createGeneralObservation() {
-  return { id: uuid(), text: '', images: [] };
+  return { id: uuid(), text: '', images: [], display: {} };
 }
 
 function createPhoto(dataUrl, fileName) {
-  return { id: uuid(), original: dataUrl, crop: null, markup: [], caption: '', fileName: fileName || '' };
+  return { id: uuid(), original: dataUrl, crop: null, markup: [], caption: '', fileName: fileName || '', display: {} };
 }
 
 function setStatus(item, status, date) {
@@ -297,6 +304,71 @@ function printColumnWidths(report) {
   return (report.config.pdfUseScreenWidths ? report.ui.columnWidths : PDF_COLUMN_WIDTHS).slice();
 }
 
+/* ==== SECTION: core — photo display ==== */
+
+// A number in 10–100 (rounded), else null.
+function validPhotoWidth(value) {
+  const n = typeof value === 'number' ? value : NaN;
+  return n >= PHOTO_WIDTH_MIN && n <= 100 ? Math.round(n) : null;
+}
+
+function snapPhotoWidth(pct) {
+  const n = Number(pct);
+  if (!Number.isFinite(n)) return 100;
+  const v = Math.min(100, Math.max(PHOTO_WIDTH_MIN, n));
+  const step = PHOTO_WIDTH_STEPS.find((s) => Math.abs(s - v) <= PHOTO_WIDTH_SNAP);
+  return step || Math.round(v);
+}
+
+// kind: 'obs' (table cell) or 'gen' (general observation).
+function cellDisplay(display, kind) {
+  const d = display || {};
+  return {
+    photoWidth: validPhotoWidth(d.photoWidth) || 100,
+    photoAlign: d.photoAlign === 'left' || d.photoAlign === 'center' ? d.photoAlign : (kind === 'gen' ? 'center' : 'left'),
+  };
+}
+
+function effectivePhotoWidth(photo, cell) {
+  return validPhotoWidth(photo && photo.display && photo.display.width) || cell.photoWidth;
+}
+
+function photoMaxHeightIn(config, kind) {
+  const key = kind === 'gen' ? 'photoMaxHeightGeneral' : 'photoMaxHeightTable';
+  const n = Number(config[key]);
+  const [min, max] = PHOTO_MAX_HEIGHT_RANGE;
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : DEFAULT_CONFIG[key];
+}
+
+// Content width of a photo cell in the PDF, in inches (mirrors css — print).
+function printPhotoCellWidthIn(report, kind) {
+  const pt = (n) => n / 72;
+  if (kind === 'gen') return PRINT_CONTENT_WIDTH_IN - pt(5 + 2 + 12 + 36 + 4);
+  const table = PRINT_CONTENT_WIDTH_IN - pt(6);
+  return table * (printColumnWidths(report)[2] / 100) - 10 / 96;
+}
+
+function photoLayout(report, kind, display, ids) {
+  const cell = cellDisplay(display, kind);
+  return {
+    align: cell.photoAlign,
+    maxHeightIn: photoMaxHeightIn(report.config, kind),
+    photos: ids.filter((id) => report.photos[id])
+      .map((id) => ({ id, width: effectivePhotoWidth(report.photos[id], cell) })),
+  };
+}
+
+// Move photoId from src to dest before beforeId (end when null). False if nothing changed.
+function movePhoto(src, dest, photoId, beforeId) {
+  const from = src.indexOf(photoId);
+  if (from < 0 || photoId === beforeId) return false;
+  if (src === dest && (src[from + 1] || null) === (beforeId || null)) return false;
+  src.splice(from, 1);
+  const at = beforeId == null ? -1 : dest.indexOf(beforeId);
+  if (at < 0) dest.push(photoId); else dest.splice(at, 0, photoId);
+  return true;
+}
+
 /* ==== SECTION: core — undo history ==== */
 
 class History {
@@ -327,15 +399,24 @@ class History {
 
 const SNAPSHOT_KEYS = ['header', 'disclaimer', 'generalObservations', 'observations', 'inherited', 'tags'];
 
+// Photos are left out (too large), except their display overrides.
 function snapshotReport(report) {
   const snap = {};
   for (const key of SNAPSHOT_KEYS) snap[key] = report[key];
+  snap.photoDisplay = {};
+  for (const [id, p] of Object.entries(report.photos || {})) {
+    if (p.display && Object.keys(p.display).length) snap.photoDisplay[id] = p.display;
+  }
   return JSON.stringify(snap);
 }
 
 function restoreSnapshot(report, snapshot) {
   if (snapshot == null) return report;
-  Object.assign(report, JSON.parse(snapshot));
+  const { photoDisplay, ...rest } = JSON.parse(snapshot);
+  Object.assign(report, rest);
+  if (photoDisplay) {
+    for (const [id, p] of Object.entries(report.photos || {})) p.display = photoDisplay[id] || {};
+  }
   return renumber(report);
 }
 
@@ -389,12 +470,16 @@ function normalizeReport(data) {
   if (typeof data.disclaimer === 'string') report.disclaimer = data.disclaimer;
   report.generalObservations = (data.generalObservations || []).map((g) => ({
     ...createGeneralObservation(), ...g, images: Array.isArray(g.images) ? g.images : [],
+    display: g.display && typeof g.display === 'object' ? g.display : {},
   }));
   report.observations = (data.observations || []).map((o) => normalizeItem(o, report));
   report.inherited = (data.inherited || []).map((o) => normalizeItem(o, report));
   report.photos = {};
   for (const [id, p] of Object.entries(data.photos || {})) {
-    report.photos[id] = { ...createPhoto('', ''), ...p, id, markup: Array.isArray(p.markup) ? p.markup : [] };
+    report.photos[id] = {
+      ...createPhoto('', ''), ...p, id, markup: Array.isArray(p.markup) ? p.markup : [],
+      display: p.display && typeof p.display === 'object' ? p.display : {},
+    };
   }
   const widths = data.ui && data.ui.columnWidths;
   if (Array.isArray(widths) && widths.length === 4 && widths.every((w) => w > 0)) {
@@ -589,11 +674,12 @@ function formatDebugReport({ userAgent = '', capabilities = {}, entries = [], no
 
 const Core = Object.freeze({
   DEFAULT_CONFIG, DEFAULT_LOGO, APP_ID, SCHEMA_VERSION, TAG_COLORS, NUMBERING_PRESETS, CSV_COLUMNS,
-  DEFAULT_COLUMN_WIDTHS, PDF_COLUMN_WIDTHS,
+  DEFAULT_COLUMN_WIDTHS, PDF_COLUMN_WIDTHS, PHOTO_WIDTH_STEPS,
   uuid, clone, pad, isoDate, formatDate, toLetters, moveById, isEmbeddedWebView,
   createReport, createObservation, createGeneralObservation, createPhoto, setStatus, reportTitle,
   formatItemNumber, renumber, nextReportFrom, reminderGroups,
   tagUsage, deleteTag, matchesFilter, printColumnWidths,
+  snapPhotoWidth, cellDisplay, effectivePhotoWidth, photoMaxHeightIn, printPhotoCellWidthIn, photoLayout, movePhoto,
   History, snapshotReport, restoreSnapshot,
   fileBaseName, referencedPhotoIds, serializeReport, migrate, normalizeReport, parseReport,
   csvField, toCSV, officeDefaultsJSON, applyOfficeDefaults,

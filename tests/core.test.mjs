@@ -336,3 +336,136 @@ test('parse errors are marked as user-facing', () => {
   }
   assert.equal(Core.userError('x').userFacing, true);
 });
+
+test('photo widths clamp to 10–100 % and snap to 25/50/75/100 when close', () => {
+  const s = Core.snapPhotoWidth;
+  assert.equal(s(48), 50);
+  assert.equal(s(53.9), 50);
+  assert.equal(s(21), 25);
+  assert.equal(s(96.5), 100);
+  assert.equal(s(60), 60);
+  assert.equal(s(33.4), 33);
+  assert.equal(s(4), 10);
+  assert.equal(s(140), 100);
+  assert.equal(s('abc'), 100);
+  deepEq(plain(Core.PHOTO_WIDTH_STEPS), [25, 50, 75, 100]);
+});
+
+test('cell display defaults: 100 % wide, table left, general observations centered', () => {
+  deepEq(Core.cellDisplay({}, 'obs'), { photoWidth: 100, photoAlign: 'left' });
+  deepEq(Core.cellDisplay(undefined, 'gen'), { photoWidth: 100, photoAlign: 'center' });
+  deepEq(Core.cellDisplay({ photoWidth: 50, photoAlign: 'center' }, 'obs'), { photoWidth: 50, photoAlign: 'center' });
+  deepEq(Core.cellDisplay({ photoWidth: 'fit', photoAlign: 'right' }, 'obs'), { photoWidth: 100, photoAlign: 'left' });
+});
+
+test('a photo width override wins over the cell default', () => {
+  const cell = Core.cellDisplay({ photoWidth: 50 }, 'obs');
+  const photo = Core.createPhoto('data:image/jpeg;base64,AAA', 'a.jpg');
+  assert.equal(Core.effectivePhotoWidth(photo, cell), 50);
+  photo.display.width = 30;
+  assert.equal(Core.effectivePhotoWidth(photo, cell), 30);
+  photo.display.width = 'bad';
+  assert.equal(Core.effectivePhotoWidth(photo, cell), 50);
+});
+
+test('print height caps default to 2 in (table) and 4 in (general), clamped to 1–6 in', () => {
+  const r = sampleReport();
+  assert.equal(r.config.photoMaxHeightTable, 2);
+  assert.equal(r.config.photoMaxHeightGeneral, 4);
+  assert.equal(Core.photoMaxHeightIn(r.config, 'obs'), 2);
+  assert.equal(Core.photoMaxHeightIn(r.config, 'gen'), 4);
+  r.config.photoMaxHeightTable = 9;
+  r.config.photoMaxHeightGeneral = 0.2;
+  assert.equal(Core.photoMaxHeightIn(r.config, 'obs'), 6);
+  assert.equal(Core.photoMaxHeightIn(r.config, 'gen'), 1);
+  r.config.photoMaxHeightTable = 'x';
+  assert.equal(Core.photoMaxHeightIn(r.config, 'obs'), 2);
+});
+
+test('print photo cell width follows the PDF column widths', () => {
+  const r = sampleReport();
+  const table = Core.printPhotoCellWidthIn(r, 'obs');
+  assert.ok(Math.abs(table - ((6.5 - 6 / 72) * 0.33 - 10 / 96)) < 1e-9, String(table));
+  r.ui.columnWidths = [10, 30, 40, 20];
+  r.config.pdfUseScreenWidths = true;
+  assert.ok(Core.printPhotoCellWidthIn(r, 'obs') > table);
+  const gen = Core.printPhotoCellWidthIn(r, 'gen');
+  assert.ok(Math.abs(gen - (6.5 - 59 / 72)) < 1e-9, String(gen));
+});
+
+test('photo layout lists existing photos with effective widths, alignment and cap', () => {
+  const r = sampleReport();
+  const a = Core.createPhoto('data:image/jpeg;base64,AAA', 'a.jpg');
+  const b = Core.createPhoto('data:image/jpeg;base64,BBB', 'b.jpg');
+  b.display.width = 75;
+  r.photos[a.id] = a;
+  r.photos[b.id] = b;
+  const layout = Core.photoLayout(r, 'obs', { photoWidth: 50, photoAlign: 'center' }, [a.id, 'missing', b.id]);
+  deepEq(layout, {
+    align: 'center', maxHeightIn: 2,
+    photos: [{ id: a.id, width: 50 }, { id: b.id, width: 75 }],
+  });
+});
+
+test('movePhoto reorders within a cell and moves between cells', () => {
+  const a = ['p1', 'p2', 'p3'];
+  const b = ['q1'];
+  assert.equal(Core.movePhoto(a, a, 'p3', 'p1'), true);
+  deepEq(a, ['p3', 'p1', 'p2']);
+  assert.equal(Core.movePhoto(a, a, 'p1', 'p2'), false, 'already before p2');
+  assert.equal(Core.movePhoto(a, a, 'p2', null), false, 'already last');
+  assert.equal(Core.movePhoto(a, a, 'p1', 'p1'), false);
+  assert.equal(Core.movePhoto(a, b, 'p1', null), true);
+  deepEq(a, ['p3', 'p2']);
+  deepEq(b, ['q1', 'p1']);
+  assert.equal(Core.movePhoto(b, a, 'q1', 'p2'), true);
+  deepEq(a, ['p3', 'q1', 'p2']);
+  assert.equal(Core.movePhoto(a, b, 'nope', null), false);
+});
+
+test('display options round-trip, and older reports get empty display objects', () => {
+  const r = sampleReport();
+  const p = Core.createPhoto('data:image/jpeg;base64,AAA', 'a.jpg');
+  p.display.width = 40;
+  r.photos[p.id] = p;
+  addObservation(r, { photoIds: [p.id], display: { photoWidth: 50, photoAlign: 'center' } });
+  r.generalObservations.push({ ...Core.createGeneralObservation(), display: { photoWidth: 75, photoAlign: 'left' } });
+  r.config.photoMaxHeightTable = 3.5;
+  const back = Core.parseReport(Core.serializeReport(r));
+  deepEq(back.observations[0].display, { photoWidth: 50, photoAlign: 'center' });
+  deepEq(back.generalObservations[0].display, { photoWidth: 75, photoAlign: 'left' });
+  deepEq(back.photos[p.id].display, { width: 40 });
+  assert.equal(back.config.photoMaxHeightTable, 3.5);
+
+  const old = Core.parseReport(JSON.stringify({
+    app: 'WM-FieldReport', schemaVersion: 1,
+    generalObservations: [{ id: 'g1', text: 'x', images: ['p1'] }],
+    observations: [{ id: 'o1', photoIds: ['p1'] }],
+    photos: { p1: { original: 'data:image/jpeg;base64,AAA', crop: null, markup: [], caption: '', fileName: 'a.jpg' } },
+  }));
+  deepEq(old.generalObservations[0].display, {});
+  deepEq(old.observations[0].display, {});
+  deepEq(old.photos.p1.display, {});
+  assert.equal(old.schemaVersion, 1);
+});
+
+test('undo restores photo width overrides and cell display options', () => {
+  const r = sampleReport();
+  const p = Core.createPhoto('data:image/jpeg;base64,AAA', 'a.jpg');
+  r.photos[p.id] = p;
+  const o = addObservation(r, { photoIds: [p.id] });
+  const history = new Core.History(100);
+
+  history.record(Core.snapshotReport(r));
+  p.display.width = 50;
+  history.record(Core.snapshotReport(r));
+  o.display.photoWidth = 25;
+
+  Core.restoreSnapshot(r, history.undo(Core.snapshotReport(r)));
+  deepEq(r.observations[0].display, {});
+  deepEq(r.photos[p.id].display, { width: 50 });
+  Core.restoreSnapshot(r, history.undo(Core.snapshotReport(r)));
+  deepEq(r.photos[p.id].display, {});
+  Core.restoreSnapshot(r, history.redo(Core.snapshotReport(r)));
+  deepEq(r.photos[p.id].display, { width: 50 });
+});
