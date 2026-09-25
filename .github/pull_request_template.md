@@ -15,11 +15,19 @@ Closes #
 
 <!-- Tests added/changed. N/A for docs-only PRs. -->
 
+## Screenshots
+
+<!--
+UI changes: 1–4 screenshots of what changed (phone width too, if the layout
+differs). Delete this section if nothing users see changed. See AGENTS.md §3.
+-->
+
 ## Checklist — code changes
 
 - [ ] Tests written first and passing
 - [ ] Lint clean
 - [ ] Checked in Chrome or Edge (and the PDF, if print output changed)
+- [ ] 1–4 screenshots attached, if the UI changed
 - [ ] Atomic commits in Conventional Commits format
 - [ ] Docs updated if behavior changed
 - [ ] Scoped to the linked issue only
