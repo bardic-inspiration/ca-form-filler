@@ -800,9 +800,12 @@ button { cursor: pointer; }
 
 /* ==== SECTION: css — toolbar and page ==== */
 .toolbar {
-  position: sticky; top: 0; z-index: 20; display: flex; align-items: center;
-  justify-content: space-between; gap: 12px; padding: 8px 16px;
+  position: sticky; top: 0; z-index: 20; padding: 8px 16px;
   background: #fff; border-bottom: 1px solid var(--line);
+}
+.toolbar-inner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  max-width: 1440px; margin: 0 auto;
 }
 .tb-left { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .app-name { font-weight: 700; color: var(--accent); white-space: nowrap; }
@@ -818,7 +821,7 @@ button { cursor: pointer; }
 .tb-btn.tb-primary:hover { background: #1d548e; }
 .tb-overflow { display: none; }
 
-.page { padding: 20px 16px 80px; }
+.page { max-width: 1440px; margin: 0 auto; padding: 20px 16px 80px; }
 .card {
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 18px 20px; margin-bottom: 18px;
@@ -1251,12 +1254,14 @@ body.locked > :not(#gate) { visibility: hidden !important; }
 </form>
 <div id="app">
   <header class="toolbar">
-    <div class="tb-left">
-      <span class="app-name">Field Report</span>
-      <span class="tb-title" id="tb-title"></span>
-      <span class="dirty-dot" id="dirty-dot" title="Unsaved changes" hidden></span>
+    <div class="toolbar-inner">
+      <div class="tb-left">
+        <span class="app-name">Field Report</span>
+        <span class="tb-title" id="tb-title"></span>
+        <span class="dirty-dot" id="dirty-dot" title="Unsaved changes" hidden></span>
+      </div>
+      <nav class="tb-right" id="tb-actions" aria-label="Report actions"></nav>
     </div>
-    <nav class="tb-right" id="tb-actions" aria-label="Report actions"></nav>
   </header>
   <main class="page">
     <div class="notice" id="notice" role="alert" hidden></div>

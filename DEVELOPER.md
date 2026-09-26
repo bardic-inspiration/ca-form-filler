@@ -20,42 +20,42 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 | core — file formats | 481–599 |
 | core — messages and debug log | 600–748 |
 | css — tokens and base | 749–800 |
-| css — toolbar and page | 801–833 |
-| css — header form | 834–865 |
-| css — general observations | 866–877 |
-| css — observation table | 878–939 |
-| css — photos | 940–1015 |
-| css — reminders | 1016–1023 |
-| css — popovers, dialogs, panel | 1024–1100 |
-| css — photo editor | 1101–1133 |
-| css — password gate | 1134–1146 |
-| css — responsive | 1147–1180 |
-| css — print | 1181–1242 |
-| markup — shell | 1243–1290 |
-| app — dom helpers and icons | 1291–1441 |
-| app — state and events | 1442–1536 |
-| app — dialogs and popovers | 1537–1615 |
-| app — floating toolbar | 1616–1663 |
-| app — notify: messages and debug log | 1664–1736 |
-| app — render: toolbar and header | 1737–1930 |
-| app — render: general observations | 1931–1986 |
-| app — render: observations table | 1987–2195 |
-| app — render: filters and reminders | 2196–2287 |
-| app — sorting and column resize | 2288–2377 |
-| app — photos: import, cells, drag and drop | 2378–2583 |
-| app — photos: pointer drag | 2584–2746 |
-| app — photos: selection, resize and cell menu | 2747–2885 |
-| app — photos: in-cell crop and rotate | 2886–3012 |
-| app — photos: flatten and markup drawing | 3013–3215 |
-| app — photo editor | 3216–3748 |
-| app — persistence: files | 3749–3899 |
-| app — persistence: autosave (IndexedDB) | 3900–3988 |
-| app — export: CSV | 3989–3996 |
-| app — export: PDF (print) | 3997–4196 |
-| app — config panel | 4197–4384 |
-| app — office defaults (developer stub) | 4385–4399 |
-| app — password gate | 4400–4425 |
-| app — keyboard, window events and init | 4426–4528 |
+| css — toolbar and page | 801–836 |
+| css — header form | 837–868 |
+| css — general observations | 869–880 |
+| css — observation table | 881–942 |
+| css — photos | 943–1018 |
+| css — reminders | 1019–1026 |
+| css — popovers, dialogs, panel | 1027–1103 |
+| css — photo editor | 1104–1136 |
+| css — password gate | 1137–1149 |
+| css — responsive | 1150–1183 |
+| css — print | 1184–1245 |
+| markup — shell | 1246–1295 |
+| app — dom helpers and icons | 1296–1446 |
+| app — state and events | 1447–1541 |
+| app — dialogs and popovers | 1542–1620 |
+| app — floating toolbar | 1621–1668 |
+| app — notify: messages and debug log | 1669–1741 |
+| app — render: toolbar and header | 1742–1935 |
+| app — render: general observations | 1936–1991 |
+| app — render: observations table | 1992–2200 |
+| app — render: filters and reminders | 2201–2292 |
+| app — sorting and column resize | 2293–2382 |
+| app — photos: import, cells, drag and drop | 2383–2588 |
+| app — photos: pointer drag | 2589–2751 |
+| app — photos: selection, resize and cell menu | 2752–2890 |
+| app — photos: in-cell crop and rotate | 2891–3017 |
+| app — photos: flatten and markup drawing | 3018–3220 |
+| app — photo editor | 3221–3753 |
+| app — persistence: files | 3754–3904 |
+| app — persistence: autosave (IndexedDB) | 3905–3993 |
+| app — export: CSV | 3994–4001 |
+| app — export: PDF (print) | 4002–4201 |
+| app — config panel | 4202–4389 |
+| app — office defaults (developer stub) | 4390–4404 |
+| app — password gate | 4405–4430 |
+| app — keyboard, window events and init | 4431–4533 |
 
 ## 2. Modules
 
@@ -613,7 +613,7 @@ Dispatched on `document` by `emit()`; `detail` is the payload.
 | Section | Key classes |
 | --- | --- |
 | css — tokens and base | `:root` tokens, `.btn`, `.icon-btn`, `.icon` |
-| css — toolbar and page | `.toolbar`, `.tb-btn`, `.tb-secondary`, `.tb-overflow`, `.page`, `.card` |
+| css — toolbar and page | `.toolbar`, `.toolbar-inner`, `.tb-btn`, `.tb-secondary`, `.tb-overflow`, `.page`, `.card` |
 | css — header form | `.header-grid`, `.field`, `.chips`, `.chip`, `.disclaimer` |
 | css — general observations | `.gen-list`, `.gen-item`, `.autogrow` |
 | css — observation table | `.obs-table`, `.col-resizer`, `.cell-text`, `.item-cell`, `.pill*`, `.drag-handle`, `.hover-control`, `.drop-indicator` |
