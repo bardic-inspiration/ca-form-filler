@@ -170,6 +170,8 @@ async function withPage(fn) {
     await cdp.send('Page.enable');
     await cdp.send('Runtime.enable');
     await waitUntilTrue(cdp, "document.documentElement.dataset.ready === 'true'");
+    await evaluate(cdp, "document.getElementById('gate-input').value = 'carex'; document.getElementById('gate').requestSubmit()");
+    await waitUntilTrue(cdp, "!document.body.classList.contains('locked')");
     // One observation holding one 200 × 100 photo.
     await evaluate(cdp, `(async () => {
       const c = document.createElement('canvas');

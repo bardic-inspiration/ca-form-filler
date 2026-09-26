@@ -537,3 +537,10 @@ test('normalizeCrop rounds into the photo and treats the whole photo as no crop'
   assert.equal(Core.normalizeCrop({ x: 0.3, y: 0.2, w: 99.8, h: 79.9 }, 100, 80), null);
   assert.equal(Core.normalizeCrop(null, 100, 80), null);
 });
+
+test('password gate accepts only the configured password', async () => {
+  assert.equal(await Core.passwordMatches('carex'), true);
+  assert.equal(await Core.passwordMatches('Carex'), false);
+  assert.equal(await Core.passwordMatches(' carex'), false);
+  assert.equal(await Core.passwordMatches(''), false);
+});

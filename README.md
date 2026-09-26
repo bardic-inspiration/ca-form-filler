@@ -7,7 +7,9 @@ them as PDFs that match the Word template.
 
 1. Open `field-report.html` in **Chrome** or **Edge** (double-click it, or drag
    it onto a browser window).
-2. That's it. Nothing to install, and no internet connection is needed.
+2. Enter the password when asked, then **Unlock**. It is asked each time the
+   file is opened.
+3. That's it. Nothing to install, and no internet connection is needed.
 
 ## 2. Filling out a report
 

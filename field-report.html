@@ -131,6 +131,19 @@ function isEmbeddedWebView(userAgent) {
   return /; wv\)/.test(String(userAgent || ''));
 }
 
+// Product seal, not security: stops casual opening, not a determined reader.
+// SHA-256 of the unlock password, so the source does not show it in plain text.
+const PASSWORD_SHA256 = '1a16e06b7f3afa20d17b8afabfa752b1147bf6e92d598c06b5bd4926ff5709a4';
+
+async function sha256Hex(text) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function passwordMatches(text) {
+  return (await sha256Hex(text)) === PASSWORD_SHA256;
+}
+
 /* ==== SECTION: core — report model ==== */
 
 function createReport(options = {}) {
@@ -720,7 +733,7 @@ function formatDebugReport({ userAgent = '', capabilities = {}, entries = [], no
 const Core = Object.freeze({
   DEFAULT_CONFIG, DEFAULT_LOGO, APP_ID, SCHEMA_VERSION, TAG_COLORS, NUMBERING_PRESETS, CSV_COLUMNS,
   DEFAULT_COLUMN_WIDTHS, PDF_COLUMN_WIDTHS, PHOTO_WIDTH_STEPS,
-  uuid, clone, pad, isoDate, formatDate, toLetters, moveById, isEmbeddedWebView,
+  uuid, clone, pad, isoDate, formatDate, toLetters, moveById, isEmbeddedWebView, sha256Hex, passwordMatches,
   createReport, createObservation, createGeneralObservation, createPhoto, setStatus, reportTitle,
   formatItemNumber, renumber, nextReportFrom, reminderGroups,
   tagUsage, deleteTag, matchesFilter, printColumnWidths,
@@ -1118,6 +1131,19 @@ body.drop-file::after {
 }
 .pe-status { padding: 4px 12px; font-size: 12px; color: #b9bcc2; background: #2a2c30; }
 
+/* ==== SECTION: css — password gate ==== */
+/* visibility (not display) keeps the app laid out while locked, so it measures normally. */
+body.locked { overflow: hidden; }
+body.locked > :not(#gate) { visibility: hidden !important; }
+.gate { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: var(--bg); }
+.gate-card {
+  display: flex; flex-direction: column; gap: 10px; width: min(320px, 100%); padding: 20px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(16,24,40,0.12);
+}
+.gate-card label { font-weight: 600; }
+.gate-card input { min-height: 38px; padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: 6px; }
+.gate-error { margin: 0; color: var(--danger); font-size: 13px; }
+
 /* ==== SECTION: css — responsive ==== */
 @media (max-width: 899px) {
   .toolbar { padding: 6px 8px; }
@@ -1213,8 +1239,16 @@ body.drop-file::after {
 .pr-rem-table th { font-size: 9pt; }
 </style>
 </head>
-<body>
+<body class="locked">
 <!-- ==== SECTION: markup — shell ==== -->
+<form id="gate" class="gate" autocomplete="off">
+  <div class="gate-card" role="dialog" aria-modal="true" aria-labelledby="gate-label">
+    <label id="gate-label" for="gate-input">Password:</label>
+    <input type="password" id="gate-input" autofocus>
+    <p class="gate-error" id="gate-error" role="alert" hidden>Incorrect password.</p>
+    <button class="btn primary" type="submit">Unlock</button>
+  </div>
+</form>
 <div id="app">
   <header class="toolbar">
     <div class="tb-left">
@@ -4363,10 +4397,37 @@ function importOfficeDefaults(json) {
   renderAll();
 }
 
+/* ==== SECTION: app — password gate ==== */
+
+function isLocked() {
+  return document.body.classList.contains('locked');
+}
+
+function bindGate(onUnlock) {
+  const form = $('#gate');
+  const input = $('#gate-input');
+  const error = $('#gate-error');
+  input.addEventListener('input', () => { error.hidden = true; });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!(await passwordMatches(input.value))) {
+      error.hidden = false;
+      input.select();
+      return;
+    }
+    input.value = '';
+    form.hidden = true;
+    document.body.classList.remove('locked');
+    onUnlock();
+  });
+  input.focus();
+}
+
 /* ==== SECTION: app — keyboard, window events and init ==== */
 
 function bindGlobalEvents() {
   document.addEventListener('keydown', (e) => {
+    if (isLocked()) return undefined;
     if (editorIsOpen()) return editorKeydown(e);
     if ($('#dlg').open) return undefined;
     const mod = e.ctrlKey || e.metaKey;
@@ -4404,6 +4465,7 @@ function bindGlobalEvents() {
     document.body.classList.remove('drop-file');
     if (!hasFiles(e)) return;
     e.preventDefault();
+    if (isLocked()) return;
     const file = [...e.dataTransfer.files].find((f) => /\.json$/i.test(f.name) || f.type === 'application/json');
     if (!file) return;
     file.text().then((text) => openReportFile({ handle: null, name: file.name, text }))
@@ -4456,7 +4518,7 @@ function init() {
   loadReport(createReport());
   showEnvironmentNotice();
   document.documentElement.dataset.ready = 'true';
-  offerAutosaveRecovery();
+  bindGate(offerAutosaveRecovery);
 }
 
 init();

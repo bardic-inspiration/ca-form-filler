@@ -10,50 +10,52 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 | Section | Lines |
 | --- | --- |
 | core — config defaults | 14–79 |
-| core — utilities | 80–133 |
-| core — report model | 134–204 |
-| core — numbering | 205–227 |
-| core — inheritance | 228–277 |
-| core — tags and filters | 278–306 |
-| core — photo display | 307–407 |
-| core — undo history | 408–467 |
-| core — file formats | 468–586 |
-| core — messages and debug log | 587–735 |
-| css — tokens and base | 736–787 |
-| css — toolbar and page | 788–820 |
-| css — header form | 821–852 |
-| css — general observations | 853–864 |
-| css — observation table | 865–926 |
-| css — photos | 927–1002 |
-| css — reminders | 1003–1010 |
-| css — popovers, dialogs, panel | 1011–1087 |
-| css — photo editor | 1088–1120 |
-| css — responsive | 1121–1154 |
-| css — print | 1155–1216 |
-| markup — shell | 1217–1256 |
-| app — dom helpers and icons | 1257–1407 |
-| app — state and events | 1408–1502 |
-| app — dialogs and popovers | 1503–1581 |
-| app — floating toolbar | 1582–1629 |
-| app — notify: messages and debug log | 1630–1702 |
-| app — render: toolbar and header | 1703–1896 |
-| app — render: general observations | 1897–1952 |
-| app — render: observations table | 1953–2161 |
-| app — render: filters and reminders | 2162–2253 |
-| app — sorting and column resize | 2254–2343 |
-| app — photos: import, cells, drag and drop | 2344–2549 |
-| app — photos: pointer drag | 2550–2712 |
-| app — photos: selection, resize and cell menu | 2713–2851 |
-| app — photos: in-cell crop and rotate | 2852–2978 |
-| app — photos: flatten and markup drawing | 2979–3181 |
-| app — photo editor | 3182–3714 |
-| app — persistence: files | 3715–3865 |
-| app — persistence: autosave (IndexedDB) | 3866–3954 |
-| app — export: CSV | 3955–3962 |
-| app — export: PDF (print) | 3963–4162 |
-| app — config panel | 4163–4350 |
-| app — office defaults (developer stub) | 4351–4365 |
-| app — keyboard, window events and init | 4366–4466 |
+| core — utilities | 80–146 |
+| core — report model | 147–217 |
+| core — numbering | 218–240 |
+| core — inheritance | 241–290 |
+| core — tags and filters | 291–319 |
+| core — photo display | 320–420 |
+| core — undo history | 421–480 |
+| core — file formats | 481–599 |
+| core — messages and debug log | 600–748 |
+| css — tokens and base | 749–800 |
+| css — toolbar and page | 801–833 |
+| css — header form | 834–865 |
+| css — general observations | 866–877 |
+| css — observation table | 878–939 |
+| css — photos | 940–1015 |
+| css — reminders | 1016–1023 |
+| css — popovers, dialogs, panel | 1024–1100 |
+| css — photo editor | 1101–1133 |
+| css — password gate | 1134–1146 |
+| css — responsive | 1147–1180 |
+| css — print | 1181–1242 |
+| markup — shell | 1243–1290 |
+| app — dom helpers and icons | 1291–1441 |
+| app — state and events | 1442–1536 |
+| app — dialogs and popovers | 1537–1615 |
+| app — floating toolbar | 1616–1663 |
+| app — notify: messages and debug log | 1664–1736 |
+| app — render: toolbar and header | 1737–1930 |
+| app — render: general observations | 1931–1986 |
+| app — render: observations table | 1987–2195 |
+| app — render: filters and reminders | 2196–2287 |
+| app — sorting and column resize | 2288–2377 |
+| app — photos: import, cells, drag and drop | 2378–2583 |
+| app — photos: pointer drag | 2584–2746 |
+| app — photos: selection, resize and cell menu | 2747–2885 |
+| app — photos: in-cell crop and rotate | 2886–3012 |
+| app — photos: flatten and markup drawing | 3013–3215 |
+| app — photo editor | 3216–3748 |
+| app — persistence: files | 3749–3899 |
+| app — persistence: autosave (IndexedDB) | 3900–3988 |
+| app — export: CSV | 3989–3996 |
+| app — export: PDF (print) | 3997–4196 |
+| app — config panel | 4197–4384 |
+| app — office defaults (developer stub) | 4385–4399 |
+| app — password gate | 4400–4425 |
+| app — keyboard, window events and init | 4426–4528 |
 
 ## 2. Modules
 
@@ -73,6 +75,8 @@ global scope. `Core` (frozen object at the end of core) lists the core API.
 | `toLetters(n) → string` | 1 → A, 27 → AA. |
 | `moveById(list, id, beforeId) → list` | Move item `id` before `beforeId` (end when null), in place. |
 | `isEmbeddedWebView(userAgent) → boolean` | Android WebView (`; wv)`): pickers, print and downloads may be ignored. |
+| `sha256Hex(text) → Promise<string>` | SHA-256 of the UTF-8 text, lower-case hex. |
+| `passwordMatches(text) → Promise<boolean>` | `sha256Hex(text)` equals `PASSWORD_SHA256` (the unlock password's hash). |
 
 ### core — report model
 
@@ -483,12 +487,23 @@ pointerdown outside the photo applies; ✕, Escape, undo or redo discards.
 | `exportOfficeDefaults() → string` | Current config + tags as office-defaults JSON. |
 | `importOfficeDefaults(json)` | Apply office-defaults JSON to the current report. |
 
+### app — password gate
+
+A product seal, not security: `<body class="locked">` hides everything but
+`#gate` until the password is entered. To change the password, replace
+`PASSWORD_SHA256` with the new password's hash (`echo -n <password> | sha256sum`).
+
+| Function | Description |
+| --- | --- |
+| `isLocked() → boolean` | `body` still has `locked`. |
+| `bindGate(onUnlock)` | Focus `#gate-input`; on a matching submit remove `locked`, hide `#gate`, call `onUnlock`; otherwise show `#gate-error`. |
+
 ### app — keyboard, window events and init
 
 | Function | Description |
 | --- | --- |
-| `bindGlobalEvents()` | Shortcuts (in crop mode Enter applies and Escape discards; otherwise Escape also clears the photo selection), toolbar placement on resize, unload warning, autosave triggers, JSON drop, event listeners. |
-| `init()` | Route `window` errors to `reportUncaught()`, `detectCapabilities()`, build UI, load a blank report, WebView notice, set `data-ready`, offer recovery. |
+| `bindGlobalEvents()` | Shortcuts (none while locked; in crop mode Enter applies and Escape discards; otherwise Escape also clears the photo selection), toolbar placement on resize, unload warning, autosave triggers, JSON drop, event listeners. |
+| `init()` | Route `window` errors to `reportUncaught()`, `detectCapabilities()`, build UI, load a blank report, WebView notice, set `data-ready`, `bindGate()` (offer recovery on unlock). |
 
 ## 3. State
 
@@ -606,6 +621,7 @@ Dispatched on `document` by `emit()`; `detail` is the payload.
 | css — reminders | `.rem-group`, `.rem-table` |
 | css — popovers, dialogs, panel | `.popover`, `.menu-item`, `.swatch`, `.dlg`, `.config-panel`, `.toast`, `.busy` |
 | css — photo editor | `.pe`, `.pe-bar`, `.pe-btn`, `.pe-stage`, `.pe-text-input` |
+| css — password gate | `body.locked`, `.gate`, `.gate-card`, `.gate-error` |
 | css — responsive | `< 900px`: cards, icon toolbar, 44 px targets |
 | css — print | `#print-root`, `.pr`, `.pr-masthead`, `.pr-title`, `.pr-head`, `.pr-general`, `.pr-table`, `.pr-reminders`; photo flow rules live in css — photos |
 
