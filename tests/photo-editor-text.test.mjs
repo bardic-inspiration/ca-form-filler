@@ -124,6 +124,8 @@ test('text tool: clicking the canvas keeps the text box focused so text can be t
     await cdp.send('Page.enable');
     await cdp.send('Runtime.enable');
     await waitUntilTrue(cdp, "document.documentElement.dataset.ready === 'true'");
+    await evaluate(cdp, "document.getElementById('gate-input').value = 'carex'; document.getElementById('gate').requestSubmit()");
+    await waitUntilTrue(cdp, "!document.body.classList.contains('locked')");
 
     // Load a photo straight into state and open the markup editor on it,
     // the way clicking a photo's "Markup" action would.
