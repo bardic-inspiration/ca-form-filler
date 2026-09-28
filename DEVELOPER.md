@@ -29,33 +29,33 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 | css — popovers, dialogs, panel | 1028–1104 |
 | css — photo editor | 1105–1137 |
 | css — password gate | 1138–1150 |
-| css — responsive | 1151–1184 |
-| css — print | 1185–1246 |
-| markup — shell | 1247–1296 |
-| app — dom helpers and icons | 1297–1447 |
-| app — state and events | 1448–1542 |
-| app — dialogs and popovers | 1543–1621 |
-| app — floating toolbar | 1622–1669 |
-| app — notify: messages and debug log | 1670–1742 |
-| app — render: toolbar and header | 1743–1936 |
-| app — render: general observations | 1937–1992 |
-| app — render: observations table | 1993–2201 |
-| app — render: filters and reminders | 2202–2293 |
-| app — sorting and column resize | 2294–2383 |
-| app — photos: import, cells, drag and drop | 2384–2589 |
-| app — photos: pointer drag | 2590–2752 |
-| app — photos: selection, resize and cell menu | 2753–2891 |
-| app — photos: in-cell crop and rotate | 2892–3018 |
-| app — photos: flatten and markup drawing | 3019–3221 |
-| app — photo editor | 3222–3754 |
-| app — persistence: files | 3755–3905 |
-| app — persistence: autosave (IndexedDB) | 3906–3994 |
-| app — export: CSV | 3995–4002 |
-| app — export: PDF (print) | 4003–4202 |
-| app — config panel | 4203–4390 |
-| app — office defaults (developer stub) | 4391–4405 |
-| app — password gate | 4406–4431 |
-| app — keyboard, window events and init | 4432–4534 |
+| css — responsive | 1151–1187 |
+| css — print | 1188–1249 |
+| markup — shell | 1250–1299 |
+| app — dom helpers and icons | 1300–1450 |
+| app — state and events | 1451–1545 |
+| app — dialogs and popovers | 1546–1624 |
+| app — floating toolbar | 1625–1672 |
+| app — notify: messages and debug log | 1673–1745 |
+| app — render: toolbar and header | 1746–1939 |
+| app — render: general observations | 1940–1995 |
+| app — render: observations table | 1996–2204 |
+| app — render: filters and reminders | 2205–2296 |
+| app — sorting and column resize | 2297–2386 |
+| app — photos: import, cells, drag and drop | 2387–2592 |
+| app — photos: pointer drag | 2593–2755 |
+| app — photos: selection, resize and cell menu | 2756–2894 |
+| app — photos: in-cell crop and rotate | 2895–3021 |
+| app — photos: flatten and markup drawing | 3022–3224 |
+| app — photo editor | 3225–3757 |
+| app — persistence: files | 3758–3908 |
+| app — persistence: autosave (IndexedDB) | 3909–3997 |
+| app — export: CSV | 3998–4005 |
+| app — export: PDF (print) | 4006–4205 |
+| app — config panel | 4206–4393 |
+| app — office defaults (developer stub) | 4394–4408 |
+| app — password gate | 4409–4434 |
+| app — keyboard, window events and init | 4435–4537 |
 
 ## 2. Modules
 

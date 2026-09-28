@@ -1178,6 +1178,9 @@ body.locked > :not(#gate) { visibility: hidden !important; }
   .item-cell .row-controls { margin: 0 0 0 auto; order: 3; }
   .col-resizer { display: none; }
   .rem-table colgroup { display: none; }
+  /* `.obs-table tr` clips to its rounded card here (below), and a full-width
+     photo's resize/crop handles sit 18px outside its edge — give them room. */
+  .obs-table .photo-cell { padding: 20px; }
   .pe { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; border-radius: 0; }
   .pe-actions { margin-left: 0; }
 }
