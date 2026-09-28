@@ -42,20 +42,20 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 | app — render: observations table | 1996–2204 |
 | app — render: filters and reminders | 2205–2296 |
 | app — sorting and column resize | 2297–2386 |
-| app — photos: import, cells, drag and drop | 2387–2592 |
-| app — photos: pointer drag | 2593–2755 |
-| app — photos: selection, resize and cell menu | 2756–2894 |
-| app — photos: in-cell crop and rotate | 2895–3021 |
-| app — photos: flatten and markup drawing | 3022–3224 |
-| app — photo editor | 3225–3757 |
-| app — persistence: files | 3758–3908 |
-| app — persistence: autosave (IndexedDB) | 3909–3997 |
-| app — export: CSV | 3998–4005 |
-| app — export: PDF (print) | 4006–4205 |
-| app — config panel | 4206–4393 |
-| app — office defaults (developer stub) | 4394–4408 |
-| app — password gate | 4409–4434 |
-| app — keyboard, window events and init | 4435–4537 |
+| app — photos: import, cells, drag and drop | 2387–2602 |
+| app — photos: pointer drag | 2603–2765 |
+| app — photos: selection, resize and cell menu | 2766–2904 |
+| app — photos: in-cell crop and rotate | 2905–3031 |
+| app — photos: flatten and markup drawing | 3032–3244 |
+| app — photo editor | 3245–3777 |
+| app — persistence: files | 3778–3928 |
+| app — persistence: autosave (IndexedDB) | 3929–4017 |
+| app — export: CSV | 4018–4025 |
+| app — export: PDF (print) | 4026–4225 |
+| app — config panel | 4226–4413 |
+| app — office defaults (developer stub) | 4414–4428 |
+| app — password gate | 4429–4454 |
+| app — keyboard, window events and init | 4455–4557 |
 
 ## 2. Modules
 
@@ -303,7 +303,8 @@ elements can use it by passing their own actions. State lives in `floatBar`
 | `photoCell(target, ids, { readOnly, compact }) → Element` | Photo flow (`photoLayout()`: widths, alignment, cap) with add button or empty state. |
 | `photoFigure(photo, readOnly, width = 100) → Element` | One photo (`--w` = width %); focusable when editable (no buttons on the photo itself). |
 | `trackAspect(img, fig)` | Set `--ar` (width ÷ height) on `fig` whenever `img` loads, so capped photos narrow. |
-| `setPhotoImage(img, photo)` | Show original, then the flattened preview. |
+| `setPhotoImage(img, photo)` | Show the cached flattened preview if fresh; else a blank box of the crop's shape (or the original, if only marked up) until the preview renders. |
+| `blankImage(w, h) → string` | Transparent SVG data URL of the given size. |
 | `refreshPhotoCell(target)` | Re-render one photo cell. |
 | `dropBeforeId(cell, x, y, skipId) → string\|null` | Photo to insert before at a point in the flow (reading order), ignoring `skipId`; null = end. |
 | `bindPhotoEvents()` | Click (add, cell ⋯ menu), file input, image file drop, paste, `photo:changed` listeners. |
@@ -366,6 +367,8 @@ pointerdown outside the photo applies; ✕, Escape, undo or redo discards.
 | Function | Description |
 | --- | --- |
 | `flattenPhoto(photo, maxSide, quality) → Promise<string>` | Crop + markup + downscale to JPEG; cached per photo and size. |
+| `flatKey(photo, quality) → string` | Cache key for the photo's current original, crop and markup. |
+| `freshFlattened(photo, maxSide, quality) → string \| null` | Finished flattened URL matching the photo as it is now, else null. |
 | `cachedFlattened(photo, maxSide) → string` | Last flattened URL, else the original. |
 | `renderFlattened(photo, maxSide, quality) → Promise<string>` | Uncached flatten. |
 | `drawShapes(ctx, shapes)` | Draw a markup array. |
