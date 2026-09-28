@@ -2509,8 +2509,18 @@ function trackAspect(img, fig) {
 
 function setPhotoImage(img, photo) {
   if (!photo.crop && !photo.markup.length) { img.src = photo.original; return; }
-  img.src = photo.original;
+  const ready = freshFlattened(photo, 1000, 0.85);
+  if (ready) { img.src = ready; return; }
+  // Until the preview is in, a crop shows as a blank box of the crop's shape
+  // (not the uncropped original); markup alone keeps the original's shape.
+  img.src = photo.crop ? blankImage(photo.crop.w, photo.crop.h) : photo.original;
   flattenPhoto(photo, 1000, 0.85).then((url) => { img.src = url; }).catch((err) => notify.log('warn', 'PREVIEW_FAILED', err));
+}
+
+// A transparent image of the given size, as a data URL.
+function blankImage(w, h) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.max(1, Math.round(w))}" height="${Math.max(1, Math.round(h))}"/>`;
+  return 'data:image/svg+xml,' + encodeURIComponent(svg);
 }
 
 function refreshPhotoCell(target) {
@@ -3023,16 +3033,26 @@ async function rotatePhoto(photoId) {
 
 const flatCache = new Map();
 
+function flatKey(photo, quality) {
+  return [photo.original.length, photo.original.slice(-48), JSON.stringify(photo.crop),
+    JSON.stringify(photo.markup), quality].join('|');
+}
+
 function flattenPhoto(photo, maxSide, quality) {
   const slot = photo.id + '|' + maxSide;
-  const key = [photo.original.length, photo.original.slice(-48), JSON.stringify(photo.crop),
-    JSON.stringify(photo.markup), quality].join('|');
+  const key = flatKey(photo, quality);
   const hit = flatCache.get(slot);
   if (hit && hit.key === key) return hit.promise;
   const entry = { key, value: null, promise: null };
   entry.promise = renderFlattened(photo, maxSide, quality).then((url) => { entry.value = url; return url; });
   flatCache.set(slot, entry);
   return entry.promise;
+}
+
+// The finished flattened URL for the photo as it is now, else null.
+function freshFlattened(photo, maxSide, quality) {
+  const hit = flatCache.get(photo.id + '|' + maxSide);
+  return (hit && hit.key === flatKey(photo, quality) && hit.value) || null;
 }
 
 function cachedFlattened(photo, maxSide) {
