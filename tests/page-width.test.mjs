@@ -1,6 +1,8 @@
-// The .page container must track the toolbar's width on desktop, not sit
-// inset behind an artificial cap while the toolbar spans edge to edge
-// (issue #13: the container looked "awkwardly narrow" against the header).
+// The .page container must track the toolbar's content width on desktop:
+// aligned edge to edge below the shared max-width (issue #13: the container
+// looked "awkwardly narrow" against the full-bleed toolbar bar), but capped
+// and centered together with it above that width, so a wide monitor doesn't
+// stretch the form's fields edge to edge across the whole screen.
 // Uses the Chrome DevTools Protocol for real layout. Needs a Chrome,
 // Chromium or Edge binary: set CHROME_PATH, or have one on PATH.
 import { test } from 'node:test';
@@ -89,13 +91,13 @@ async function waitUntilTrue(cdp, expression, timeout = 5000) {
   throw new Error(`timed out waiting for: ${expression}` + (lastError ? ` (last error: ${lastError.message})` : ''));
 }
 
-async function withPage(fn) {
+async function withPage(fn, { windowSize = '1600,900' } = {}) {
   const chrome = findChrome();
   const profile = mkdtempSync(join(tmpdir(), 'fr-page-width-'));
   const proc = spawn(chrome, [
     '--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run',
     '--host-resolver-rules=MAP * ~NOTFOUND', `--user-data-dir=${profile}`,
-    '--remote-debugging-port=0', '--window-size=1600,900',
+    '--remote-debugging-port=0', `--window-size=${windowSize}`,
     pathToFileURL(HTML_PATH).href,
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
   try {
@@ -115,11 +117,16 @@ async function withPage(fn) {
   }
 }
 
-test('page container width tracks the full-width toolbar on a wide desktop viewport', () => withPage(async (cdp) => {
-  const rects = JSON.parse(await evaluate(cdp, `JSON.stringify({
+async function getRects(cdp) {
+  return JSON.parse(await evaluate(cdp, `JSON.stringify({
     toolbar: document.querySelector('.toolbar').getBoundingClientRect(),
+    toolbarInner: document.querySelector('.toolbar-inner').getBoundingClientRect(),
     page: document.querySelector('.page').getBoundingClientRect(),
   })`));
+}
+
+test('page container tracks the toolbar below the shared max-width', () => withPage(async (cdp) => {
+  const rects = await getRects(cdp);
 
   assert.ok(
     Math.abs(rects.page.left - rects.toolbar.left) <= 1,
@@ -129,4 +136,22 @@ test('page container width tracks the full-width toolbar on a wide desktop viewp
     Math.abs(rects.page.right - rects.toolbar.right) <= 1,
     `page (right edge ${rects.page.right}) should align with the toolbar (right edge ${rects.toolbar.right}), not sit inset behind a narrower cap`,
   );
-}));
+}, { windowSize: '1300,900' }));
+
+test('page container stays capped and centered with the toolbar on an ultra-wide viewport', () => withPage(async (cdp) => {
+  const rects = await getRects(cdp);
+
+  assert.ok(
+    rects.page.width <= 1440 + 1,
+    `page (width ${rects.page.width}) should be capped instead of stretching edge to edge on a wide monitor`,
+  );
+  assert.ok(
+    Math.abs(rects.page.left - rects.toolbarInner.left) <= 1 && Math.abs(rects.page.right - rects.toolbarInner.right) <= 1,
+    `page (left ${rects.page.left}, right ${rects.page.right}) should stay aligned with the toolbar's centered content ` +
+    `(left ${rects.toolbarInner.left}, right ${rects.toolbarInner.right})`,
+  );
+  assert.ok(
+    rects.page.left > 1,
+    'page should be centered (not flush left) once it is narrower than the full-bleed toolbar',
+  );
+}, { windowSize: '1920,1080' }));

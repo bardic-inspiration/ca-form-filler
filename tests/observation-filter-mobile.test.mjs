@@ -1,10 +1,8 @@
-// Regression test for issue #6: on the text tool, clicking the canvas opened
-// a floating textarea that the browser immediately blurred again, because
-// <canvas> isn't focusable and the browser's default mousedown action blurs
-// whatever was just focused. That default action only fires for a *trusted*
-// mousedown, so this can't be reproduced with synthetic DOM events — it needs
-// a real click, dispatched here over the Chrome DevTools Protocol (CDP) using
-// Node's built-in WebSocket client (no added dependency).
+// Issue #27: filtering observations by status or tag left the row visible on
+// narrow viewports. The mobile responsive rule `.obs-table tr { display: block }`
+// (needed to turn table rows into stacked cards) is more specific than
+// `.row-hidden { display: none }`, so it silently won the cascade and the
+// hidden class never actually hid anything below the 899px breakpoint.
 // Needs a Chrome, Chromium or Edge binary: set CHROME_PATH, or have one on PATH.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -77,8 +75,6 @@ async function evaluate(cdp, expression, { awaitPromise = false } = {}) {
   return res.result.value;
 }
 
-// Polls until the expression is truthy. While the page is still loading
-// (a slow CI runner) `document` can be empty, so errors mean "not yet".
 async function waitUntilTrue(cdp, expression, timeout = 10000) {
   const start = Date.now();
   let lastError = null;
@@ -94,76 +90,45 @@ async function waitUntilTrue(cdp, expression, timeout = 10000) {
   throw new Error(`timed out waiting for: ${expression}` + (lastError ? ` (last error: ${lastError.message})` : ''));
 }
 
-async function click(cdp, x, y, clickCount = 1) {
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount });
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount });
-}
-
-// A minimal 1x1 transparent PNG; only needs to decode, its content is irrelevant.
-const TINY_PNG = 'data:image/png;base64,'
-  + 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
-
-test('text tool: clicking the canvas keeps the text box focused so text can be typed', async () => {
+async function withPage(fn) {
   const chrome = findChrome();
-  const profile = mkdtempSync(join(tmpdir(), 'fr-editor-'));
+  const profile = mkdtempSync(join(tmpdir(), 'fr-filter-mobile-'));
   const proc = spawn(chrome, [
     '--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run',
     '--host-resolver-rules=MAP * ~NOTFOUND', `--user-data-dir=${profile}`,
-    '--remote-debugging-port=0', '--window-size=1280,900',
+    '--remote-debugging-port=0', '--window-size=390,844',
     pathToFileURL(HTML_PATH).href,
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
-
   try {
     const browserWsUrl = await waitForDevtoolsUrl(proc);
     const port = browserWsUrl.match(/:(\d+)\//)[1];
     const targets = await fetch(`http://127.0.0.1:${port}/json/list`).then((r) => r.json());
     const page = targets.find((t) => t.type === 'page');
     assert.ok(page, 'no page target found');
-
     const cdp = await connectCDP(page.webSocketDebuggerUrl);
     await cdp.send('Page.enable');
     await cdp.send('Runtime.enable');
     await waitUntilTrue(cdp, "document.documentElement.dataset.ready === 'true'");
     await evaluate(cdp, "document.getElementById('gate-input').value = 'carex'; document.getElementById('gate').requestSubmit()");
     await waitUntilTrue(cdp, "!document.body.classList.contains('locked')");
-
-    // Load a photo straight into state and open the markup editor on it,
-    // the way clicking a photo's "Markup" action would.
-    const { x, y } = JSON.parse(await evaluate(cdp, `
-      (async () => {
-        const photo = createPhoto(${JSON.stringify(TINY_PNG)}, 'test.png');
-        state.report.photos[photo.id] = photo;
-        await openPhotoEditor(photo.id);
-        setEditorTool('text');
-        const r = document.getElementById('pe-canvas').getBoundingClientRect();
-        return JSON.stringify({ x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) });
-      })()
-    `, { awaitPromise: true }));
-
-    // A real, trusted click (not a synthetic dispatchEvent) is required: only
-    // trusted input triggers the browser's default focus-stealing behavior
-    // that this fix prevents.
-    await click(cdp, x, y);
-    // Give the (buggy, pre-fix) blur handler's setTimeout a chance to run.
-    await new Promise((r) => setTimeout(r, 150));
-
-    const focusedTextBox = await evaluate(cdp,
-      "!!(document.activeElement && document.activeElement.classList.contains('pe-text-input'))");
-    assert.equal(focusedTextBox, true, 'the text box should stay focused after clicking the canvas');
-
-    await cdp.send('Input.insertText', { text: 'Test label' });
-    const typedValue = await evaluate(cdp, 'document.activeElement.value');
-    assert.equal(typedValue, 'Test label');
-
-    await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
-    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
-
-    const shapes = await evaluate(cdp,
-      "JSON.stringify(editor.work.markup.filter((s) => s.type === 'text').map((s) => s.text))");
-    assert.deepEqual(JSON.parse(shapes), ['Test label']);
-
+    await evaluate(cdp, 'addObservation(); renderAll();');
+    await fn(cdp);
     cdp.close();
   } finally {
     proc.kill();
   }
-});
+}
+
+test('filtering by status hides the single non-matching observation row on a phone-width viewport', () => withPage(async (cdp) => {
+  await evaluate(cdp, `
+    [...document.querySelectorAll('[aria-label="Filter by status"] button')]
+      .find((b) => b.textContent === 'Complete').click();
+  `);
+  await waitUntilTrue(cdp, "document.querySelector('#obs-body tr').classList.contains('row-hidden')");
+  const { display, visible } = await evaluate(cdp, `(() => {
+    const row = document.querySelector('#obs-body tr');
+    return { display: getComputedStyle(row).display, visible: row.offsetParent !== null };
+  })()`);
+  assert.equal(display, 'none', 'filtered-out row should not be rendered on a narrow viewport');
+  assert.equal(visible, false, 'filtered-out row should not take up layout space');
+}));

@@ -14,7 +14,7 @@ export function extractScript(html, id) {
 
 export function loadCore() {
   const html = readFileSync(HTML_PATH, 'utf8');
-  const context = vm.createContext({ crypto: globalThis.crypto });
+  const context = vm.createContext({ crypto: globalThis.crypto, TextEncoder });
   vm.runInContext(extractScript(html, 'core'), context, { filename: 'field-report.html#core' });
   return vm.runInContext('Core', context);
 }
