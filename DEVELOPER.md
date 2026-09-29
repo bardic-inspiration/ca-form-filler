@@ -744,4 +744,4 @@ None.
 | Command | Checks |
 | --- | --- |
 | `node tools/lint.mjs` | Scripts parse, no network access, errors go through `notify`, this file in sync |
-| `node --test` | Core logic (`tests/core.test.mjs`); headless Chrome boot and print (`tests/smoke.test.mjs`, needs Chrome/Chromium/Edge or `CHROME_PATH`) |
+| `node --test` | Core logic (`tests/core.test.mjs`); headless Chrome boot and print (`tests/smoke.test.mjs`) and in-page behavior over CDP (the other `tests/*.test.mjs`), all sharing the Chrome launch and CDP helpers in `tests/browser.mjs`; needs Chrome/Chromium/Edge or `CHROME_PATH` |
