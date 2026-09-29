@@ -17,45 +17,45 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 | core — tags and filters | 291–319 |
 | core — photo display | 320–420 |
 | core — undo history | 421–480 |
-| core — file formats | 481–599 |
-| core — messages and debug log | 600–748 |
-| css — tokens and base | 749–800 |
-| css — toolbar and page | 801–836 |
-| css — header form | 837–869 |
-| css — general observations | 870–881 |
-| css — observation table | 882–947 |
-| css — photos | 948–1023 |
-| css — reminders | 1024–1031 |
-| css — popovers, dialogs, panel | 1032–1108 |
-| css — photo editor | 1109–1141 |
-| css — password gate | 1142–1154 |
-| css — responsive | 1155–1192 |
-| css — print | 1193–1254 |
-| markup — shell | 1255–1304 |
-| app — dom helpers and icons | 1305–1455 |
-| app — state and events | 1456–1550 |
-| app — dialogs and popovers | 1551–1629 |
-| app — floating toolbar | 1630–1677 |
-| app — notify: messages and debug log | 1678–1750 |
-| app — render: toolbar and header | 1751–1944 |
-| app — render: general observations | 1945–2000 |
-| app — render: observations table | 2001–2210 |
-| app — render: filters and reminders | 2211–2302 |
-| app — sorting and column resize | 2303–2392 |
-| app — photos: import, cells, drag and drop | 2393–2608 |
-| app — photos: pointer drag | 2609–2771 |
-| app — photos: selection, resize and cell menu | 2772–2910 |
-| app — photos: in-cell crop and rotate | 2911–3037 |
-| app — photos: flatten and markup drawing | 3038–3250 |
-| app — photo editor | 3251–3783 |
-| app — persistence: files | 3784–3934 |
-| app — persistence: autosave (IndexedDB) | 3935–4023 |
-| app — export: CSV | 4024–4031 |
-| app — export: PDF (print) | 4032–4231 |
-| app — config panel | 4232–4419 |
-| app — office defaults (developer stub) | 4420–4434 |
-| app — password gate | 4435–4460 |
-| app — keyboard, window events and init | 4461–4563 |
+| core — file formats | 481–608 |
+| core — messages and debug log | 609–757 |
+| css — tokens and base | 758–809 |
+| css — toolbar and page | 810–845 |
+| css — header form | 846–881 |
+| css — general observations | 882–893 |
+| css — observation table | 894–959 |
+| css — photos | 960–1035 |
+| css — reminders | 1036–1043 |
+| css — popovers, dialogs, panel | 1044–1120 |
+| css — photo editor | 1121–1153 |
+| css — password gate | 1154–1166 |
+| css — responsive | 1167–1204 |
+| css — print | 1205–1266 |
+| markup — shell | 1267–1316 |
+| app — dom helpers and icons | 1317–1467 |
+| app — state and events | 1468–1562 |
+| app — dialogs and popovers | 1563–1641 |
+| app — floating toolbar | 1642–1689 |
+| app — notify: messages and debug log | 1690–1762 |
+| app — render: toolbar and header | 1763–2012 |
+| app — render: general observations | 2013–2068 |
+| app — render: observations table | 2069–2278 |
+| app — render: filters and reminders | 2279–2370 |
+| app — sorting and column resize | 2371–2460 |
+| app — photos: import, cells, drag and drop | 2461–2676 |
+| app — photos: pointer drag | 2677–2839 |
+| app — photos: selection, resize and cell menu | 2840–2978 |
+| app — photos: in-cell crop and rotate | 2979–3105 |
+| app — photos: flatten and markup drawing | 3106–3318 |
+| app — photo editor | 3319–3851 |
+| app — persistence: files | 3852–4002 |
+| app — persistence: autosave (IndexedDB) | 4003–4091 |
+| app — export: CSV | 4092–4099 |
+| app — export: PDF (print) | 4100–4299 |
+| app — config panel | 4300–4487 |
+| app — office defaults (developer stub) | 4488–4502 |
+| app — password gate | 4503–4528 |
+| app — keyboard, window events and init | 4529–4631 |
 
 ## 2. Modules
 
@@ -150,6 +150,8 @@ a photo cell target (`obs:<id>`, `gen:<id>`).
 | `serializeReport(report) → string` | Renumber, drop unreferenced photos, JSON. |
 | `migrate(data) → data` | Schema upgrade hook (no steps yet). |
 | `normalizeItem(item, report) → Observation` | Fill missing observation fields. |
+| `normalizeAttendee(a) → { name, organization }` | Upgrade a plain-name attendee (older files) to the two-field shape. |
+| `formatAttendee(a) → string` | `Name (Organization)`, or just the name; used in the printed report. |
 | `normalizeReport(data) → report` | Fill defaults for every report field (empty `display` objects on older files). |
 | `parseReport(json) → report` | Validate `app`/`schemaVersion`, migrate, normalize. Throws user-facing errors. |
 | `csvField(value) → string` | RFC 4180 quoting. |
@@ -246,6 +248,7 @@ elements can use it by passing their own actions. State lives in `floatBar`
 | `textField(label, value, onInput, opts) → Element` | Labeled input. |
 | `headerTextField(label, key, opts) → Element` | Input bound to `report.header[key]`. |
 | `chipInput(list, label) → Element` | Chip editor bound to an array. |
+| `attendeeInput(list, label) → Element` | Attendee pill editor (name | organization, ×) bound to an array of attendees. |
 | `renderHeader()` | Render `#sec-header`. |
 | `renderDisclaimer(editing = false) → Element` | Collapsed or editing disclaimer block. |
 
@@ -520,7 +523,8 @@ A product seal, not security: `<body class="locked">` hides everything but
 | `header.reportTitle` | string | `"Field Observation Report"` |
 | `header.author`, `purpose`, `project`, `projectNumber`, `time`, `weather` | string | `""` |
 | `header.visitDate`, `header.reportDate` | ISO date | today |
-| `header.attendees`, `header.distribution` | string[] | `[]` |
+| `header.attendees` | `{ name, organization }[]` (older files with plain names are upgraded on load) | `[]` |
+| `header.distribution` | string[] | `[]` |
 | `disclaimer` | string | `config.disclaimer` |
 | `generalObservations[]` | `{ id, text, images: photoId[], display }` | `[]` |
 | `observations[]` | Observation | `[]` |

@@ -252,7 +252,7 @@ function nextReportFrom(previous, options = {}) {
     purpose: h.purpose,
     project: h.project,
     projectNumber: h.projectNumber,
-    attendees: h.attendees.slice(),
+    attendees: h.attendees.map((a) => ({ ...a })),
     distribution: h.distribution.slice(),
   });
   next.disclaimer = prev.disclaimer;
@@ -509,6 +509,15 @@ function migrate(data) {
   return data;
 }
 
+function normalizeAttendee(a) {
+  const src = typeof a === 'string' ? { name: a } : (a && typeof a === 'object' ? a : {});
+  return { name: String(src.name || '').trim(), organization: String(src.organization || '').trim() };
+}
+
+function formatAttendee(a) {
+  return a.organization ? `${a.name} (${a.organization})` : a.name;
+}
+
 function normalizeItem(item, report) {
   const base = createObservation(report);
   const out = { ...base, ...item };
@@ -521,9 +530,9 @@ function normalizeItem(item, report) {
 function normalizeReport(data) {
   const report = createReport({ config: data.config, tags: data.tags });
   report.header = { ...report.header, ...(data.header || {}) };
-  for (const key of ['attendees', 'distribution']) {
-    if (!Array.isArray(report.header[key])) report.header[key] = [];
-  }
+  if (!Array.isArray(report.header.distribution)) report.header.distribution = [];
+  report.header.attendees = (Array.isArray(report.header.attendees) ? report.header.attendees : [])
+    .map(normalizeAttendee).filter((a) => a.name || a.organization);
   report.header.reportNumber = Number(report.header.reportNumber) || 1;
   if (typeof data.disclaimer === 'string') report.disclaimer = data.disclaimer;
   report.generalObservations = (data.generalObservations || []).map((g) => ({
@@ -734,7 +743,7 @@ const Core = Object.freeze({
   DEFAULT_CONFIG, DEFAULT_LOGO, APP_ID, SCHEMA_VERSION, TAG_COLORS, NUMBERING_PRESETS, CSV_COLUMNS,
   DEFAULT_COLUMN_WIDTHS, PDF_COLUMN_WIDTHS, PHOTO_WIDTH_STEPS,
   uuid, clone, pad, isoDate, formatDate, toLetters, moveById, isEmbeddedWebView, sha256Hex, passwordMatches,
-  createReport, createObservation, createGeneralObservation, createPhoto, setStatus, reportTitle,
+  createReport, formatAttendee, createObservation, createGeneralObservation, createPhoto, setStatus, reportTitle,
   formatItemNumber, renumber, nextReportFrom, reminderGroups,
   tagUsage, deleteTag, matchesFilter, printColumnWidths,
   snapPhotoWidth, cellDisplay, effectivePhotoWidth, photoMaxHeightIn, printPhotoCellWidthIn, photoLayout, movePhoto,
@@ -859,6 +868,9 @@ button { cursor: pointer; }
 .chip-text { border: 0; background: none; padding: 0; cursor: text; }
 .chip-remove { width: 22px; height: 22px; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: 16px; line-height: 1; }
 .chip-remove:hover { background: #dfe3e8; color: var(--ink); }
+.chips .chip-attendee input.chip-edit { width: auto; min-height: 24px; border: 0; border-radius: 4px; padding: 0 2px; font-size: 14px; background: transparent; }
+.chips .chip-attendee input.chip-edit:focus { background: #fff; outline: 1px solid var(--accent); }
+.chip-sep { color: var(--muted); padding: 0 2px; }
 .chip-edit { border: 0; outline: none; background: transparent; width: 10ch; padding: 0; }
 .chips input.chip-input { flex: 1 1 120px; width: auto; min-width: 100px; min-height: 28px; border: 0; outline: none; padding: 2px 4px; background: transparent; }
 .disclaimer { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -1873,6 +1885,61 @@ function chipInput(list, label) {
   return wrap;
 }
 
+function attendeeInput(list, label) {
+  const wrap = h('div', { class: 'chips', role: 'group', 'aria-label': label });
+  const commit = () => { markDirty(); wrap.replaceWith(attendeeInput(list, label)); };
+  const input = h('input', {
+    class: 'chip-input', type: 'text', placeholder: list.length ? '' : 'Type a name, press Enter',
+    'aria-label': 'Add attendee',
+    onkeydown: (e) => {
+      const v = input.value.trim();
+      if ((e.key === 'Enter' || e.key === ',') && v) {
+        e.preventDefault();
+        checkpoint();
+        list.push({ name: v, organization: '' });
+        commit();
+        const nw = $(`.chips[aria-label="${label}"]`);
+        const orgs = nw.querySelectorAll('.chip-org');
+        orgs[orgs.length - 1].focus();
+      } else if (e.key === 'Backspace' && !input.value && list.length) {
+        checkpoint();
+        list.pop();
+        commit();
+        $(`.chips[aria-label="${label}"] .chip-input`).focus();
+      }
+    },
+  });
+  list.forEach((a, i) => {
+    const chip = h('span', { class: 'chip chip-attendee' });
+    const field = (key, cls, aria, ph) => {
+      const el = h('input', {
+        class: 'chip-edit ' + cls, type: 'text', value: a[key], placeholder: ph, 'aria-label': aria,
+        oninput: () => { beginTextEdit(`attendee:${i}:${key}`); a[key] = el.value; markDirty(); el.size = Math.max(4, el.value.length || ph.length); },
+        onblur: () => {
+          endTextEdit();
+          if (!list.includes(a)) return;
+          if (!a.name.trim() && !a.organization.trim()) { checkpoint(); list.splice(list.indexOf(a), 1); commit(); }
+        },
+        onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); input.focus(); } },
+      });
+      el.size = Math.max(4, a[key].length || ph.length);
+      return el;
+    };
+    chip.append(
+      field('name', 'chip-name', 'Attendee name', 'Name'),
+      h('span', { class: 'chip-sep', 'aria-hidden': 'true' }, '|'),
+      field('organization', 'chip-org', 'Attendee organization', 'Organization'),
+      h('button', {
+        type: 'button', class: 'chip-remove', 'aria-label': 'Remove ' + (a.name || 'attendee'),
+        onclick: () => { checkpoint(); list.splice(i, 1); commit(); },
+      }, '×'));
+    wrap.append(chip);
+  });
+  wrap.append(input);
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) input.focus(); });
+  return wrap;
+}
+
 function renderHeader() {
   const r = state.report;
   const hd = r.header;
@@ -1908,7 +1975,8 @@ function renderHeader() {
       headerTextField('Time', 'time', { placeholder: 'e.g. 2:00 PM' }),
       headerTextField('Weather', 'weather', { placeholder: 'e.g. 60°, rainy' }),
       chipsField('Distribution', 'distribution'),
-      h('div', { class: 'span-3' }, chipsField('Attendees', 'attendees')),
+      h('div', { class: 'span-3' }, h('div', { class: 'field' },
+        h('span', { class: 'field-label' }, 'Attendees'), attendeeInput(hd.attendees, 'Attendees'))),
     ),
     renderDisclaimer(),
   );
@@ -4126,7 +4194,7 @@ function renderPrint(urlFor) {
         field(1, 'Visit Date', formatDate(hd.visitDate)), field(2, 'Project', hd.project), field(3, 'Project No.', hd.projectNumber),
         h('div', { class: 'pr-gap' }),
         field(1, 'Time', hd.time), field(2, 'Weather', hd.weather), field(3, 'Distribution', hd.distribution.join(', ')),
-        field(1, 'Attendees', hd.attendees.join(', '))),
+        field(1, 'Attendees', hd.attendees.map(formatAttendee).join(', '))),
       h('p', { class: 'pr-disclaimer' }, r.disclaimer),
       h('div', { class: 'pr-general' },
         h('h2', null, 'General Observations/Comments'),
