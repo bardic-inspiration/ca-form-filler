@@ -17,8 +17,11 @@ them as PDFs that match the Word template.
   numbers (1.01, 1.02…).
 - Fill in By, Purpose, dates, Project, Project No., Time and Weather.
   Both dates start as today.
-- **Attendees** and **Distribution**: type a name and press Enter. Click a
-  name to change it, or × to remove it.
+- **Distribution**: type a name and press Enter. Click a name to change it,
+  or × to remove it.
+- **Attendees**: type a name and press Enter, then fill in the organization.
+  Each attendee is a pill (Name | Organization); edit either part in place, or
+  click × to remove it.
 - **Disclaimer**: click Edit to change it for this report.
 - **General Observations/Comments**: click *Add general observation*. Each
   one can hold pictures (sketches, details): drop them in, paste, or click.

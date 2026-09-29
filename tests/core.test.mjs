@@ -14,7 +14,7 @@ function sampleReport() {
     reportNumber: 2, project: "Mariner's Hall", projectNumber: 'P3935',
     author: 'Reif Larsen', purpose: 'General site observation',
     time: '2:00 PM', weather: '60deg. Rainy',
-    attendees: ['Reif (WM)', 'Jared (RCI)'], distribution: ['Owner'],
+    attendees: [{ name: 'Reif', organization: 'WM' }, { name: 'Jared', organization: 'RCI' }], distribution: ['Owner'],
   });
   return r;
 }
@@ -127,7 +127,7 @@ test('next report carries only incomplete items with original numbers', () => {
   assert.equal(next.header.reportNumber, 3);
   assert.equal(next.header.project, "Mariner's Hall");
   assert.equal(next.header.author, 'Reif Larsen');
-  deepEq(plain(next.header.attendees), ['Reif (WM)', 'Jared (RCI)']);
+  deepEq(plain(next.header.attendees), [{ name: 'Reif', organization: 'WM' }, { name: 'Jared', organization: 'RCI' }]);
   assert.equal(next.header.reportDate, '2026-07-10');
   assert.equal(next.header.visitDate, '2026-07-10');
   assert.equal(next.header.time, '');
@@ -543,4 +543,18 @@ test('password gate accepts only the configured password', async () => {
   assert.equal(await Core.passwordMatches('Carex'), false);
   assert.equal(await Core.passwordMatches(' carex'), false);
   assert.equal(await Core.passwordMatches(''), false);
+});
+
+test('attendees migrate from plain names and keep organization', () => {
+  const r = Core.parseReport(JSON.stringify({
+    app: 'WM-FieldReport', schemaVersion: 1,
+    header: { attendees: ['Reif (WM)', { name: 'Jared', organization: 'RCI' }, { name: 'Sam' }, '  '] },
+  }));
+  deepEq(r.header.attendees, [
+    { name: 'Reif (WM)', organization: '' },
+    { name: 'Jared', organization: 'RCI' },
+    { name: 'Sam', organization: '' },
+  ]);
+  assert.deepEqual(Core.formatAttendee({ name: 'Jared', organization: 'RCI' }), 'Jared (RCI)');
+  assert.equal(Core.formatAttendee({ name: 'Sam', organization: '' }), 'Sam');
 });
