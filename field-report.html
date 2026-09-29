@@ -911,17 +911,21 @@ textarea.autogrow { field-sizing: content; resize: none; overflow: hidden; min-h
 .obs-table td:has(.cell-text) { position: relative; }
 .cell-text.autogrow { position: absolute; inset: 0; field-sizing: fixed; overflow-y: auto; }
 .cell-text:focus { outline: 2px solid var(--accent); outline-offset: -2px; background: #fbfcff; }
+/* The Contract Requirement cell also holds the status/tag pills, bottom
+   anchored below the (possibly long) requirement text. Stack them in a flex
+   column that fills the cell so the pills never overlap the text above. */
+.cell-fill { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.cell-fill .cell-text.autogrow { position: static; inset: auto; flex: 1 1 auto; min-height: 0; }
+.cell-fill .pills { flex: 0 0 auto; padding: 6px 8px; border-top: 1px solid var(--line-strong); }
 .item-cell { padding: 8px 6px !important; }
 .item-num { font-weight: 700; font-size: 15px; }
 .row-controls { display: flex; align-items: center; gap: 2px; margin-top: 4px; }
-.pills { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 6px; }
+.pills { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px; }
 .pill {
   display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 2px 9px;
   border-radius: 999px; border: 1px solid var(--line-strong); background: #fff;
   font-size: 12px; font-weight: 600; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.item-cell .pill { white-space: normal; text-align: left; border-radius: 10px; overflow-wrap: anywhere; }
-.item-cell .pill .icon { display: none; }
 .pill-complete { background: var(--pill-complete-bg); border-color: #a7dca0; color: var(--pill-complete-ink); }
 .pill-open { background: var(--pill-open-bg); border-color: #f5b98a; color: var(--pill-open-ink); }
 .pill-tag { border-color: rgba(0,0,0,0.12); color: #333; }
@@ -1173,8 +1177,9 @@ body.locked > :not(#gate) { visibility: hidden !important; }
      textarea size to its own text again instead of filling the cell. */
   .obs-table td:has(.cell-text) { position: static; }
   .cell-text.autogrow { position: static; inset: auto; field-sizing: content; overflow: hidden; }
+  .cell-fill { position: static; display: block; }
+  .cell-fill .pills { padding: 8px; border-top: 1px solid #e6e9ee; }
   .item-cell { display: flex !important; flex-wrap: wrap; align-items: center; gap: 6px; }
-  .item-cell .pills { flex-direction: row; flex-wrap: wrap; margin-top: 0; }
   .item-cell .row-controls { margin: 0 0 0 auto; order: 3; }
   .col-resizer { display: none; }
   .rem-table colgroup { display: none; }
@@ -2043,26 +2048,27 @@ function addObservation() {
 }
 
 function observationRow(o) {
-  const textCell = (field, label) => h('td', { 'data-label': label },
-    h('textarea', {
-      class: 'cell-text autogrow', value: o[field], rows: 3, dataset: { field },
-      'aria-label': label + ' ' + o.number,
-      oninput: (e) => { beginTextEdit('obs:' + o.id + ':' + field); o[field] = e.target.value; markDirty(); },
-      onfocusout: endTextEdit,
-    }));
+  const textarea = (field, label) => h('textarea', {
+    class: 'cell-text autogrow', value: o[field], rows: 3, dataset: { field },
+    'aria-label': label + ' ' + o.number,
+    oninput: (e) => { beginTextEdit('obs:' + o.id + ':' + field); o[field] = e.target.value; markDirty(); },
+    onfocusout: endTextEdit,
+  });
   return h('tr', { dataset: { id: o.id } },
     h('td', { class: 'item-cell' },
       h('div', { class: 'item-num' }, o.number),
-      h('div', { class: 'pills' }, statusPill(o), tagPills(o)),
       h('div', { class: 'row-controls' },
         h('span', { class: 'drag-handle hover-control', title: 'Drag to reorder', 'aria-label': 'Drag to reorder' }, icon('grip')),
         h('button', {
           type: 'button', class: 'icon-btn danger hover-control', title: 'Delete observation',
           'aria-label': 'Delete observation ' + o.number, onclick: () => deleteItem(o),
         }, icon('trash')))),
-    textCell('description', 'Observation'),
+    h('td', { 'data-label': 'Observation' }, textarea('description', 'Observation')),
     h('td', { 'data-label': 'Supporting Photo' }, photoCell('obs:' + o.id, o.photoIds)),
-    textCell('requirement', 'Contract Requirement'));
+    h('td', { 'data-label': 'Contract Requirement' },
+      h('div', { class: 'cell-fill' },
+        textarea('requirement', 'Contract Requirement'),
+        h('div', { class: 'pills' }, statusPill(o), tagPills(o)))));
 }
 
 async function deleteItem(item) {
