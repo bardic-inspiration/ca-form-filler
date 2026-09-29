@@ -140,6 +140,7 @@ test('Observation and Contract Requirement textareas fill the full height of a t
     row: document.querySelector('#obs-body tr').getBoundingClientRect(),
     description: document.querySelector('textarea[data-field="description"]').getBoundingClientRect(),
     requirement: document.querySelector('textarea[data-field="requirement"]').getBoundingClientRect(),
+    pills: document.querySelector('#obs-body tr .pills').getBoundingClientRect(),
   })`));
 
   assert.ok(rects.row.height > 150, `row should be tall because of the photo, was ${rects.row.height}`);
@@ -147,8 +148,15 @@ test('Observation and Contract Requirement textareas fill the full height of a t
     rects.description.height >= rects.row.height - 2,
     `Observation textarea (${rects.description.height}px) should fill the row height (${rects.row.height}px)`,
   );
+  // The Contract Requirement cell also holds the status/tag pills (issue #33),
+  // bottom-anchored below the textarea. Together they should fill the row with
+  // no gap and no overlap, instead of the textarea alone filling it.
   assert.ok(
-    rects.requirement.height >= rects.row.height - 2,
-    `Contract Requirement textarea (${rects.requirement.height}px) should fill the row height (${rects.row.height}px)`,
+    rects.requirement.bottom <= rects.pills.top + 1,
+    `Contract Requirement textarea (bottom ${rects.requirement.bottom}px) should not overlap the tags below it (top ${rects.pills.top}px)`,
+  );
+  assert.ok(
+    rects.pills.bottom >= rects.row.bottom - 2,
+    `Tags below the Contract Requirement textarea (bottom ${rects.pills.bottom}px) should reach the bottom of the row (${rects.row.bottom}px)`,
   );
 }));
