@@ -423,6 +423,26 @@ test('movePhoto reorders within a cell and moves between cells', () => {
   assert.equal(Core.movePhoto(a, b, 'nope', null), false);
 });
 
+test('stepPhoto moves a photo one place within its cell', () => {
+  const a = ['p1', 'p2', 'p3'];
+  assert.equal(Core.stepPhoto(a, 'p1', -1), false, 'first cannot move earlier');
+  assert.equal(Core.stepPhoto(a, 'p3', 1), false, 'last cannot move later');
+  assert.equal(Core.stepPhoto(a, 'nope', 1), false);
+  assert.equal(Core.stepPhoto(a, 'p1', 1), true);
+  deepEq(a, ['p2', 'p1', 'p3']);
+  assert.equal(Core.stepPhoto(a, 'p1', 1), true);
+  deepEq(a, ['p2', 'p3', 'p1']);
+  assert.equal(Core.stepPhoto(a, 'p3', -1), true);
+  deepEq(a, ['p3', 'p2', 'p1']);
+});
+
+test('the photo move controls setting is off by default and round-trips', () => {
+  const r = sampleReport();
+  assert.equal(r.config.photoMoveControls, false);
+  r.config.photoMoveControls = true;
+  assert.equal(Core.parseReport(Core.serializeReport(r)).config.photoMoveControls, true);
+});
+
 test('display options round-trip, and older reports get empty display objects', () => {
   const r = sampleReport();
   const p = Core.createPhoto('data:image/jpeg;base64,AAA', 'a.jpg');

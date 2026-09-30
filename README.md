@@ -52,7 +52,11 @@ them as PDFs that match the Word template.
    table and General Observations. On a phone or tablet, press and hold the
    photo until it lifts, then drag (a quick swipe just scrolls). A blue line
    shows where it will land. Press Esc, or let go outside a photo box, to
-   cancel. Ctrl+Z undoes a move.
+   cancel. Ctrl+Z undoes a move. To move photos without dragging, turn on
+   Settings → Accessibility → **Show photo move controls**: the photo toolbar
+   then has **Move earlier** and **Move later** buttons, and a photo with
+   keyboard focus moves with Alt+↑ or Alt+← (earlier) and Alt+↓ or Alt+→
+   (later). These move a photo within its box.
 3. **Photo toolbar:** tap or click a photo to select it. A toolbar appears
    above it with **Crop**, **Rotate**, **Edit** (the photo editor) and
    **Remove**. With the keyboard, Tab to a photo and press Enter.
@@ -133,6 +137,7 @@ Settings are saved with each report and apply right away.
 | Table photo max height | Tallest a table photo may print, 1–6 in (default 2 in) |
 | General Observations image max height | Tallest a General Observations photo may print, 1–6 in (default 4 in) |
 | Default markup color | Starting color in the photo editor |
+| Show photo move controls | Accessibility: Move earlier / Move later buttons and Alt+arrow keys for photos (off by default) |
 | Default disclaimer text | Disclaimer for new reports |
 | Tags | Rename, recolor, delete or add tags |
 | Masthead logo, tagline, footer | Replace the logo or change the page 1 text |

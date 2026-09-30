@@ -299,3 +299,99 @@ test('saving the full photo editor is one undo step, so undo never reverts it by
   await key(cdp, 'z', 'KeyZ', 90, 2);
   assert.equal(await evaluate(cdp, `${PHOTO()}.original === ${JSON.stringify(before)}`), true);
 }));
+
+// Photo move controls (issue #9): an opt-in setting adds Move earlier / Move
+// later to the toolbar and Alt+arrow keys on a focused photo.
+async function addTwoPhotos(cdp) {
+  await evaluate(cdp, `(async () => {
+    for (const color of ['#33c', '#cc3']) {
+      const c = document.createElement('canvas');
+      c.width = 200; c.height = 100;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = color; ctx.fillRect(0, 0, 200, 100);
+      const photo = createPhoto(c.toDataURL('image/jpeg', 0.9), 'more.jpg');
+      state.report.photos[photo.id] = photo;
+      state.report.observations[0].photoIds.push(photo.id);
+      photo.display.width = 25;
+    }
+    ${PHOTO()}.display.width = 25;
+    renderAll();
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  })()`, { awaitPromise: true });
+  await waitUntilTrue(cdp, "[...document.querySelectorAll('.photo img')].every((i) => i.complete)");
+  return evaluate(cdp, 'state.report.observations[0].photoIds.slice()');
+}
+const photoOrder = (cdp) => evaluate(cdp, 'state.report.observations[0].photoIds.slice()');
+const moveButtons = (cdp) => evaluate(cdp, `JSON.stringify([...document.querySelectorAll('#float-bar [data-action^=move]')]
+  .map((b) => ({ action: b.dataset.action, label: b.getAttribute('aria-label'), disabled: b.disabled,
+    w: b.getBoundingClientRect().width, h: b.getBoundingClientRect().height })))`).then(JSON.parse);
+
+test('photo move controls are off by default, so the toolbar and Alt+arrow keys are unchanged', () => withPage(async (cdp) => {
+  const ids = await addTwoPhotos(cdp);
+  await click(cdp, ...Object.values(await point(cdp, '.photo')));
+  assert.deepEqual(await toolbarActions(cdp), ['crop', 'rotate', 'edit', 'remove']);
+  await evaluate(cdp, "document.querySelector('.photo').focus()");
+  await key(cdp, 'ArrowRight', 'ArrowRight', 39, 1);
+  assert.deepEqual(await photoOrder(cdp), ids);
+}));
+
+test('Settings → Accessibility turns on move buttons that reorder within the cell, one undo step each', () => withPage(async (cdp) => {
+  const ids = await addTwoPhotos(cdp);
+  await evaluate(cdp, 'openConfig()');
+  const toggled = await evaluate(cdp, `(() => {
+    const section = [...document.querySelectorAll('#config-panel .config-section')]
+      .find((s) => s.querySelector('h3').textContent === 'Accessibility');
+    const box = section && section.querySelector('input[type=checkbox]');
+    if (!box || box.checked) return false;
+    box.click();
+    return true;
+  })()`);
+  assert.equal(toggled, true, 'an unchecked toggle in an Accessibility section');
+  assert.equal(await evaluate(cdp, 'state.report.config.photoMoveControls'), true);
+  await evaluate(cdp, 'closeConfig()');
+
+  await click(cdp, ...Object.values(await point(cdp, `.photo[data-photo-id="${ids[0]}"]`)));
+  assert.deepEqual(await toolbarActions(cdp), ['crop', 'rotate', 'moveEarlier', 'moveLater', 'edit', 'remove']);
+  const first = await moveButtons(cdp);
+  assert.deepEqual(first.map((b) => [b.action, b.label, b.disabled]),
+    [['moveEarlier', 'Move photo earlier', true], ['moveLater', 'Move photo later', false]]);
+  assert.ok(first.every((b) => b.w >= 36 && b.h >= 36), 'touch targets are at least 36 px');
+
+  await click(cdp, ...Object.values(await point(cdp, '#float-bar [data-action=moveLater]')));
+  assert.deepEqual(await photoOrder(cdp), [ids[1], ids[0], ids[2]]);
+  await waitUntilTrue(cdp, "document.activeElement && document.activeElement.dataset.action === 'moveLater'");
+  await click(cdp, ...Object.values(await point(cdp, '#float-bar [data-action=moveLater]')));
+  assert.deepEqual(await photoOrder(cdp), [ids[1], ids[2], ids[0]]);
+  const last = await moveButtons(cdp);
+  assert.deepEqual(last.map((b) => b.disabled), [false, true], 'the last photo cannot move later');
+  await waitUntilTrue(cdp, "document.activeElement && document.activeElement.dataset.action === 'moveEarlier'");
+
+  await key(cdp, 'z', 'KeyZ', 90, 2);
+  assert.deepEqual(await photoOrder(cdp), [ids[1], ids[0], ids[2]]);
+  await key(cdp, 'z', 'KeyZ', 90, 2);
+  assert.deepEqual(await photoOrder(cdp), ids);
+}));
+
+test('with move controls on, Alt+arrow keys move a focused photo and focus follows it', () => withPage(async (cdp) => {
+  const ids = await addTwoPhotos(cdp);
+  await evaluate(cdp, "setConfig('photoMoveControls', true)");
+  await evaluate(cdp, `document.querySelector('.photo[data-photo-id="${ids[0]}"]').focus()`);
+  const focusedId = () => evaluate(cdp, 'document.activeElement.dataset.photoId || null');
+
+  await key(cdp, 'ArrowDown', 'ArrowDown', 40, 1);
+  assert.deepEqual(await photoOrder(cdp), [ids[1], ids[0], ids[2]]);
+  assert.equal(await focusedId(), ids[0]);
+  await key(cdp, 'ArrowRight', 'ArrowRight', 39, 1);
+  assert.deepEqual(await photoOrder(cdp), [ids[1], ids[2], ids[0]]);
+  assert.equal(await focusedId(), ids[0]);
+  await key(cdp, 'ArrowRight', 'ArrowRight', 39, 1);
+  assert.deepEqual(await photoOrder(cdp), [ids[1], ids[2], ids[0]], 'the last photo stays put');
+  await key(cdp, 'ArrowUp', 'ArrowUp', 38, 1);
+  await key(cdp, 'ArrowLeft', 'ArrowLeft', 37, 1);
+  assert.deepEqual(await photoOrder(cdp), ids);
+  assert.equal(await focusedId(), ids[0]);
+  assert.equal(await evaluate(cdp, 'location.protocol'), 'file:', 'Alt+Left did not navigate away');
+
+  await key(cdp, 'z', 'KeyZ', 90, 2);
+  assert.deepEqual(await photoOrder(cdp), [ids[1], ids[0], ids[2]], 'each move is one undo step');
+}));
