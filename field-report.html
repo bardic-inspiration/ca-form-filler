@@ -38,6 +38,7 @@ const DEFAULT_CONFIG = {
   photoMaxHeightTable: 2, // inches, 1–6
   photoMaxHeightGeneral: 4, // inches, 1–6
   markupColor: '#F26A21',
+  photoMoveControls: false, // Accessibility: move buttons and Alt+arrow keys
   disclaimer: DEFAULT_DISCLAIMER,
   logo: null, // null = DEFAULT_LOGO
   autosaveSeconds: 30,
@@ -380,6 +381,14 @@ function movePhoto(src, dest, photoId, beforeId) {
   const at = beforeId == null ? -1 : dest.indexOf(beforeId);
   if (at < 0) dest.push(photoId); else dest.splice(at, 0, photoId);
   return true;
+}
+
+// Move photoId one place earlier (delta -1) or later (+1) in list. False at an end.
+function stepPhoto(list, photoId, delta) {
+  const from = list.indexOf(photoId);
+  const to = from + delta;
+  if (from < 0 || to < 0 || to >= list.length) return false;
+  return movePhoto(list, list, photoId, delta < 0 ? list[to] : (list[to + 1] || null));
 }
 
 // Crop rectangles are { x, y, w, h } in original-image px.
@@ -746,7 +755,7 @@ const Core = Object.freeze({
   createReport, formatAttendee, createObservation, createGeneralObservation, createPhoto, setStatus, reportTitle,
   formatItemNumber, renumber, nextReportFrom, reminderGroups,
   tagUsage, deleteTag, matchesFilter, printColumnWidths,
-  snapPhotoWidth, cellDisplay, effectivePhotoWidth, photoMaxHeightIn, printPhotoCellWidthIn, photoLayout, movePhoto,
+  snapPhotoWidth, cellDisplay, effectivePhotoWidth, photoMaxHeightIn, printPhotoCellWidthIn, photoLayout, movePhoto, stepPhoto,
   rotateCrop90, resizeCrop, normalizeCrop,
   History, snapshotReport, restoreSnapshot,
   fileBaseName, referencedPhotoIds, serializeReport, migrate, normalizeReport, parseReport,
@@ -1071,6 +1080,7 @@ body.is-sorting { cursor: grabbing; user-select: none; }
   border: 0; border-radius: 7px; background: none; color: var(--ink);
 }
 .float-bar-btn:hover { background: #eef1f5; }
+.float-bar-btn:disabled { opacity: 0.35; background: none; cursor: default; }
 .float-bar-btn.primary { background: var(--accent); color: #fff; }
 .float-bar-btn.primary:hover { filter: brightness(1.08); }
 .float-bar-btn.danger:hover { color: var(--danger); background: #fdecea; }
@@ -1368,6 +1378,8 @@ const ICON_PATHS = {
   rotate: '<path d="M15.5 9.5A6 6 0 1 1 13 4.6"/><path d="M13.5 1.8l-.3 3.1 3.1.3"/>',
   resetCrop: '<path d="M6 2.5v11.5h11.5M2.5 6H14v11.5"/><path d="M3 3l14 14" stroke-dasharray="2 2"/>',
   check: '<path d="M4 10.5l4 4 8-9"/>',
+  chevronLeft: '<path d="M12.5 4.5L7 10l5.5 5.5"/>',
+  chevronRight: '<path d="M7.5 4.5L13 10l-5.5 5.5"/>',
 };
 
 function icon(name) {
@@ -1651,7 +1663,7 @@ function showFloatingToolbar(anchor, actions, { label = 'Actions' } = {}) {
   bar.setAttribute('aria-label', label);
   bar.replaceChildren(...actions.map((a) => h('button', {
     type: 'button', class: 'float-bar-btn' + (a.kind ? ' ' + a.kind : ''), title: a.label, 'aria-label': a.label,
-    dataset: { action: a.name }, onclick: () => a.run(),
+    dataset: { action: a.name }, disabled: !!a.disabled, onclick: () => a.run(),
   }, icon(a.icon))));
   bar.hidden = false;
   floatBar.anchor = anchor;
@@ -2547,6 +2559,9 @@ function photoCell(target, ids, { readOnly = false, compact = false } = {}) {
   if (layout.photos.length) {
     cell.append(h('div', { class: 'photo-flow' + (layout.align === 'center' ? ' align-center' : '') },
       layout.photos.map(({ id, width }) => photoFigure(state.report.photos[id], readOnly, width))));
+    // Selected once inside the cell: the toolbar actions read the cell's target.
+    const selected = !readOnly && $$('.photo', cell).find((f) => f.dataset.photoId === state.selectedPhotoId);
+    if (selected) setPhotoSelected(selected, true);
   }
   if (!readOnly) {
     cell.append(ids.length
@@ -2570,7 +2585,6 @@ function photoFigure(photo, readOnly, width = 100) {
   }, img);
   fig.style.setProperty('--w', width);
   trackAspect(img, fig);
-  if (!readOnly && state.selectedPhotoId === photo.id) setPhotoSelected(fig, true);
   return fig;
 }
 
@@ -2862,12 +2876,42 @@ function setPhotoSelected(fig, on) {
 
 function photoToolbarActions(fig) {
   const id = fig.dataset.photoId;
+  const target = fig.closest('.photo-cell').dataset.target;
+  const list = photoList(target) || [];
+  const move = state.report.config.photoMoveControls ? [
+    { name: 'moveEarlier', label: 'Move photo earlier', icon: 'chevronLeft', disabled: list[0] === id,
+      run: () => stepPhotoIn(target, id, -1, 'toolbar') },
+    { name: 'moveLater', label: 'Move photo later', icon: 'chevronRight', disabled: list[list.length - 1] === id,
+      run: () => stepPhotoIn(target, id, 1, 'toolbar') },
+  ] : [];
   return [
     { name: 'crop', label: 'Crop', icon: 'crop', run: () => startPhotoCrop(fig) },
     { name: 'rotate', label: 'Rotate 90°', icon: 'rotate', run: () => rotatePhoto(id) },
+    ...move,
     { name: 'edit', label: 'Edit photo', icon: 'pencil', run: () => openPhotoEditor(id) },
-    { name: 'remove', label: 'Remove photo', icon: 'trash', kind: 'danger', run: () => removePhoto(fig.closest('.photo-cell').dataset.target, id) },
+    { name: 'remove', label: 'Remove photo', icon: 'trash', kind: 'danger', run: () => removePhoto(target, id) },
   ];
+}
+
+// Move a photo one place within its cell; one undo step. Focus follows the
+// move: to the photo ('photo') or to an enabled move button ('toolbar').
+function stepPhotoIn(target, photoId, delta, focus) {
+  const list = photoList(target);
+  if (!list) return;
+  const before = snapshotReport(state.report);
+  if (!stepPhoto(list, photoId, delta)) return;
+  checkpoint(before);
+  markDirty();
+  refreshPhotoCell(target);
+  if (focus === 'photo') {
+    const fig = $(`.photo-cell[data-target="${target}"] .photo[data-photo-id="${photoId}"]`);
+    if (fig) fig.focus();
+    return;
+  }
+  const btn = $(`#float-bar [data-action=${delta < 0 ? 'moveEarlier' : 'moveLater'}]`);
+  const other = $(`#float-bar [data-action=${delta < 0 ? 'moveLater' : 'moveEarlier'}]`);
+  const next = btn && !btn.disabled ? btn : other;
+  if (next) next.focus();
 }
 
 function removePhoto(target, photoId) {
@@ -2892,8 +2936,16 @@ function bindPhotoResize() {
     if (handle && e.button <= 0) startPhotoResize(e, handle);
   });
   // Keyboard: Enter or Space on a photo selects it and moves focus to its toolbar.
+  // With photo move controls on, Alt+arrow keys move it one place.
   $('.page').addEventListener('keydown', (e) => {
     const fig = e.target.closest('.photo');
+    const delta = { ArrowUp: -1, ArrowLeft: -1, ArrowDown: 1, ArrowRight: 1 }[e.key];
+    if (fig && e.target === fig && delta && e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey
+      && state.report.config.photoMoveControls && !fig.classList.contains('cropping')) {
+      e.preventDefault();
+      stepPhotoIn(fig.closest('.photo-cell').dataset.target, fig.dataset.photoId, delta, 'photo');
+      return;
+    }
     if (!fig || e.target !== fig || (e.key !== 'Enter' && e.key !== ' ') || fig.classList.contains('cropping')) return;
     e.preventDefault();
     selectPhoto(fig.dataset.photoId);
@@ -4457,6 +4509,8 @@ function renderConfigPanel() {
             $$('.swatch', e.target.parentElement).forEach((s) => s.setAttribute('aria-pressed', String(s === e.target)));
           },
         }))))),
+    section('Accessibility', configToggle('Show photo move controls', 'photoMoveControls',
+      'Adds Move earlier / Move later to the photo toolbar. Alt+arrow keys move a focused photo.')),
     section('Disclaimer', configText('Default disclaimer text', 'disclaimer', { multiline: true })),
     section('Tags', tagsEditor()),
     section('Masthead and footer',
