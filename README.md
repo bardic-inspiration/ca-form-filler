@@ -74,7 +74,9 @@ them as PDFs that match the Word template.
    width and the alignment (left or center) of its photos. *Reset photos to
    cell default* clears sizes set on single photos. General Observations
    photos work the same way.
-8. The screen shows the same layout as the PDF. Tall photos are limited to
+8. The screen shows the same layout as the PDF, scaled to fit: the same
+   photo sizes, the same photos side by side, at any screen size. On a phone
+   the whole box shrinks rather than rearranging. Tall photos are limited to
    a maximum height (see Settings → PDF).
 9. **Edit** opens the photo editor:
    - tools: select/move, circle, arrow, pen, line, dimension (a line with a

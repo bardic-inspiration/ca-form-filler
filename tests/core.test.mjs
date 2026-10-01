@@ -385,7 +385,8 @@ test('print height caps default to 2 in (table) and 4 in (general), clamped to 1
 test('print photo cell width follows the PDF column widths', () => {
   const r = sampleReport();
   const table = Core.printPhotoCellWidthIn(r, 'obs');
-  assert.ok(Math.abs(table - ((6.5 - 6 / 72) * 0.33 - 10 / 96)) < 1e-9, String(table));
+  // Less 5px padding per side and half of each 1pt collapsed border.
+  assert.ok(Math.abs(table - ((6.5 - 6 / 72) * 0.33 - 10 / 96 - 1 / 72)) < 1e-9, String(table));
   r.ui.columnWidths = [10, 30, 40, 20];
   r.config.pdfUseScreenWidths = true;
   assert.ok(Core.printPhotoCellWidthIn(r, 'obs') > table);
@@ -402,9 +403,28 @@ test('photo layout lists existing photos with effective widths, alignment and ca
   r.photos[b.id] = b;
   const layout = Core.photoLayout(r, 'obs', { photoWidth: 50, photoAlign: 'center' }, [a.id, 'missing', b.id]);
   deepEq(layout, {
-    align: 'center', maxHeightIn: 2,
+    ...Core.photoScale(r, 'obs'),
+    align: 'center',
     photos: [{ id: a.id, width: 50 }, { id: b.id, width: 75 }],
   });
+});
+
+test('photo scale gives the PDF cap and gap, and their ratios to the PDF cell width', () => {
+  const r = sampleReport();
+  for (const kind of ['obs', 'gen']) {
+    const cellIn = Core.printPhotoCellWidthIn(r, kind);
+    const scale = Core.photoScale(r, kind);
+    assert.equal(scale.maxHeightIn, Core.photoMaxHeightIn(r.config, kind));
+    assert.equal(scale.gapIn, 5 / 96);
+    assert.ok(Math.abs(scale.capRatio - scale.maxHeightIn / cellIn) < 1e-12, kind);
+    assert.ok(Math.abs(scale.gapRatio - scale.gapIn / cellIn) < 1e-12, kind);
+  }
+  // A wider PDF photo column: the same gap and cap are a smaller share of it.
+  const before = Core.photoScale(r, 'obs');
+  r.ui.columnWidths = [8, 30, 42, 20];
+  r.config.pdfUseScreenWidths = true;
+  const after = Core.photoScale(r, 'obs');
+  assert.ok(after.gapRatio < before.gapRatio && after.capRatio < before.capRatio);
 });
 
 test('movePhoto reorders within a cell and moves between cells', () => {

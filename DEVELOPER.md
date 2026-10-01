@@ -9,53 +9,53 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 
 | Section | Lines |
 | --- | --- |
-| core — config defaults | 14–80 |
-| core — utilities | 81–147 |
-| core — report model | 148–218 |
-| core — numbering | 219–241 |
-| core — inheritance | 242–291 |
-| core — tags and filters | 292–320 |
-| core — photo display | 321–429 |
-| core — undo history | 430–489 |
-| core — file formats | 490–617 |
-| core — messages and debug log | 618–766 |
-| css — tokens and base | 767–818 |
-| css — toolbar and page | 819–854 |
-| css — header form | 855–890 |
-| css — general observations | 891–902 |
-| css — observation table | 903–968 |
-| css — photos | 969–1044 |
-| css — reminders | 1045–1052 |
-| css — popovers, dialogs, panel | 1053–1130 |
-| css — photo editor | 1131–1163 |
-| css — password gate | 1164–1176 |
-| css — responsive | 1177–1214 |
-| css — print | 1215–1276 |
-| markup — shell | 1277–1326 |
-| app — dom helpers and icons | 1327–1479 |
-| app — state and events | 1480–1574 |
-| app — dialogs and popovers | 1575–1653 |
-| app — floating toolbar | 1654–1701 |
-| app — notify: messages and debug log | 1702–1774 |
-| app — render: toolbar and header | 1775–2024 |
-| app — render: general observations | 2025–2080 |
-| app — render: observations table | 2081–2290 |
-| app — render: filters and reminders | 2291–2382 |
-| app — sorting and column resize | 2383–2472 |
-| app — photos: import, cells, drag and drop | 2473–2690 |
-| app — photos: pointer drag | 2691–2853 |
-| app — photos: selection, resize and cell menu | 2854–3030 |
-| app — photos: in-cell crop and rotate | 3031–3157 |
-| app — photos: flatten and markup drawing | 3158–3370 |
-| app — photo editor | 3371–3903 |
-| app — persistence: files | 3904–4054 |
-| app — persistence: autosave (IndexedDB) | 4055–4143 |
-| app — export: CSV | 4144–4151 |
-| app — export: PDF (print) | 4152–4351 |
-| app — config panel | 4352–4541 |
-| app — office defaults (developer stub) | 4542–4556 |
-| app — password gate | 4557–4582 |
-| app — keyboard, window events and init | 4583–4685 |
+| core — config defaults | 14–81 |
+| core — utilities | 82–148 |
+| core — report model | 149–219 |
+| core — numbering | 220–242 |
+| core — inheritance | 243–292 |
+| core — tags and filters | 293–321 |
+| core — photo display | 322–440 |
+| core — undo history | 441–500 |
+| core — file formats | 501–628 |
+| core — messages and debug log | 629–777 |
+| css — tokens and base | 778–829 |
+| css — toolbar and page | 830–865 |
+| css — header form | 866–901 |
+| css — general observations | 902–913 |
+| css — observation table | 914–979 |
+| css — photos | 980–1058 |
+| css — reminders | 1059–1066 |
+| css — popovers, dialogs, panel | 1067–1144 |
+| css — photo editor | 1145–1177 |
+| css — password gate | 1178–1190 |
+| css — responsive | 1191–1228 |
+| css — print | 1229–1290 |
+| markup — shell | 1291–1340 |
+| app — dom helpers and icons | 1341–1493 |
+| app — state and events | 1494–1588 |
+| app — dialogs and popovers | 1589–1667 |
+| app — floating toolbar | 1668–1715 |
+| app — notify: messages and debug log | 1716–1788 |
+| app — render: toolbar and header | 1789–2038 |
+| app — render: general observations | 2039–2094 |
+| app — render: observations table | 2095–2304 |
+| app — render: filters and reminders | 2305–2396 |
+| app — sorting and column resize | 2397–2486 |
+| app — photos: import, cells, drag and drop | 2487–2704 |
+| app — photos: pointer drag | 2705–2867 |
+| app — photos: selection, resize and cell menu | 2868–3044 |
+| app — photos: in-cell crop and rotate | 3045–3171 |
+| app — photos: flatten and markup drawing | 3172–3384 |
+| app — photo editor | 3385–3917 |
+| app — persistence: files | 3918–4068 |
+| app — persistence: autosave (IndexedDB) | 4069–4157 |
+| app — export: CSV | 4158–4165 |
+| app — export: PDF (print) | 4166–4366 |
+| app — config panel | 4367–4556 |
+| app — office defaults (developer stub) | 4557–4571 |
+| app — password gate | 4572–4597 |
+| app — keyboard, window events and init | 4598–4700 |
 
 ## 2. Modules
 
@@ -127,7 +127,8 @@ a photo cell target (`obs:<id>`, `gen:<id>`).
 | `effectivePhotoWidth(photo, cell) → number` | `photo.display.width` if valid, else the cell's `photoWidth`. |
 | `photoMaxHeightIn(config, kind) → number` | `photoMaxHeightTable` / `photoMaxHeightGeneral`, clamped to 1–6 in. |
 | `printPhotoCellWidthIn(report, kind) → number` | Photo cell content width in the PDF (inches; mirrors css — print). |
-| `photoLayout(report, kind, display, ids) → { align, maxHeightIn, photos: [{ id, width }] }` | Layout of one photo cell, shared by screen and print. |
+| `photoScale(report, kind) → { maxHeightIn, gapIn, capRatio, gapRatio }` | PDF height cap and photo gap (inches), and each as a multiple of `printPhotoCellWidthIn()`, so the editor can draw the PDF's layout at any cell width. |
+| `photoLayout(report, kind, display, ids) → { ...photoScale(), align, photos: [{ id, width }] }` | Layout of one photo cell, shared by screen and print: the editor is a scaled copy of the PDF. |
 | `movePhoto(src, dest, photoId, beforeId) → boolean` | Move an id between (or within) photo lists; false when nothing changed. |
 | `stepPhoto(list, photoId, delta) → boolean` | Move an id one place earlier (`-1`) or later (`1`) in its list via `movePhoto()`; false at either end. |
 | `rotateCrop90(crop, height) → crop\|null` | Crop `{x, y, w, h}` turned 90° clockwise with a photo of the given (pre-rotation) height. |
@@ -302,8 +303,8 @@ elements can use it by passing their own actions. State lives in `floatBar`
 | `photoList(target) → string[]` | Photo id array for `obs:<id>` or `gen:<id>`. |
 | `addPhotosTo(target, files, beforeId)` | Import image files into a cell. |
 | `photoCellDisplay(target) → object` | The cell's `display` (observation or general observation). |
-| `photoCapRatio(kind) → number` | Screen max height as a multiple of the cell width: `photoMaxHeightIn()` ÷ `printPhotoCellWidthIn()`. |
-| `updatePhotoCaps()` | Refresh `--cap-ratio` on every photo cell (after cap, column width or template changes). |
+| `setPhotoScale(cell, { capRatio, gapRatio })` | Set `--cap-ratio` and `--gap-ratio` on a photo cell (from `photoScale()`). |
+| `updatePhotoScale()` | Refresh `--cap-ratio` and `--gap-ratio` on every photo cell (after cap, column width or template changes). |
 | `photoCell(target, ids, { readOnly, compact }) → Element` | Photo flow (`photoLayout()`: widths, alignment, cap) with add button or empty state; re-selects `state.selectedPhotoId` once its figure is in the cell. |
 | `photoFigure(photo, readOnly, width = 100) → Element` | One photo (`--w` = width %); focusable when editable (no buttons on the photo itself). |
 | `trackAspect(img, fig)` | Set `--ar` (width ÷ height) on `fig` whenever `img` loads, so capped photos narrow. |
@@ -464,7 +465,7 @@ pointerdown outside the photo applies; ✕, Escape, undo or redo discards.
 | `cssString(text) → string` | Quote text for CSS `content`. |
 | `updatePageStyle()` | Write `@page` rules (running header, page 1 footer) into `#print-page-style`. |
 | `printPhotoIds() → string[]` | Photos that appear in the PDF. |
-| `printPhotoFlow(kind, display, ids, urlFor) → Element\|null` | Print photo flow from `photoLayout()` (`--w`, `--cap` in inches, alignment). |
+| `printPhotoFlow(kind, display, ids, urlFor) → Element\|null` | Print photo flow from `photoLayout()` (`--w`, `--cap` and `--gap` in inches, alignment). |
 | `printPill(text, cls, bg) → Element` | Print pill. |
 | `printItemPills(item, { status }) → Element\|null` | Status/tag pills per Config toggles. |
 | `renderPrint(urlFor)` | Build `#print-root` from the report. |
@@ -622,18 +623,18 @@ Dispatched on `document` by `emit()`; `detail` is the payload.
 
 | Section | Key classes |
 | --- | --- |
-| css — tokens and base | `:root` tokens, `.btn`, `.icon-btn`, `.icon` |
-| css — toolbar and page | `.toolbar`, `.toolbar-inner`, `.tb-btn`, `.tb-secondary`, `.tb-overflow`, `.page`, `.card` |
-| css — header form | `.header-grid`, `.field`, `.chips`, `.chip`, `.disclaimer` |
-| css — general observations | `.gen-list`, `.gen-item`, `.autogrow` |
-| css — observation table | `.obs-table`, `.col-resizer`, `.cell-text`, `.item-cell`, `.pill*`, `.drag-handle`, `.hover-control`, `.drop-indicator` |
-| css — photos | `.photo.selected`, `.photo-handle` (`data-corner`), `.photo-size`, `.photo-cell-foot`, `.photo-cell-menu`, `.photo-menu`, `.photo-ghost`, `.photo.dragging`, `.photo-cell.drag-over`, `.photo-cell` (container for `cqw`), `.photo-flow` / `.pr-flow` (`.align-center`), `.photo` / `.pr-fig` (vars `--w`, `--cap-h`, `--ar`), `.photo-edit`, `.photo-remove`, `.photo-empty` |
-| css — reminders | `.rem-group`, `.rem-table` |
-| css — popovers, dialogs, panel | `.popover`, `.menu-item`, `.swatch`, `.dlg`, `.config-panel`, `.toast`, `.busy` |
-| css — photo editor | `.pe`, `.pe-bar`, `.pe-btn`, `.pe-stage`, `.pe-text-input` |
-| css — password gate | `body.locked`, `.gate`, `.gate-card`, `.gate-error` |
-| css — responsive | `< 900px`: cards, icon toolbar, 44 px targets |
-| css — print | `#print-root`, `.pr`, `.pr-masthead`, `.pr-title`, `.pr-head`, `.pr-general`, `.pr-table`, `.pr-reminders`; photo flow rules live in css — photos |
+| css — tokens and base | 778–829 |
+| css — toolbar and page | 830–865 |
+| css — header form | 866–901 |
+| css — general observations | 902–913 |
+| css — observation table | 914–979 |
+| css — photos | 980–1058 |
+| css — reminders | 1059–1066 |
+| css — popovers, dialogs, panel | 1067–1144 |
+| css — photo editor | 1145–1177 |
+| css — password gate | 1178–1190 |
+| css — responsive | 1191–1228 |
+| css — print | 1229–1290 |
 
 `@page` rules are generated at runtime into `<style id="print-page-style">`
 by `updatePageStyle()`: Letter, margins 1.55in 1in 0.8in 1in; `@top-left`
