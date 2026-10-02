@@ -337,18 +337,44 @@ test('parse errors are marked as user-facing', () => {
   assert.equal(Core.userError('x').userFacing, true);
 });
 
-test('photo widths clamp to 10–100 % and snap to 25/50/75/100 when close', () => {
+test('photo size presets are full, half and third of the row', () => {
+  deepEq(plain(Core.PHOTO_SIZE_PRESETS), [
+    { width: 100, label: 'Full' }, { width: 50, label: 'Half' }, { width: 100 / 3, label: 'Third' },
+  ]);
+  deepEq(plain(Core.PHOTO_WIDTH_STEPS), [100, 50, 100 / 3]);
+});
+
+test('photo widths clamp to 10–100 % and snap to the presets when close', () => {
   const s = Core.snapPhotoWidth;
   assert.equal(s(48), 50);
   assert.equal(s(53.9), 50);
-  assert.equal(s(21), 25);
+  assert.equal(s(33), 100 / 3);
+  assert.equal(s(30), 100 / 3);
+  assert.equal(s(21), 21);
+  assert.equal(s(25), 25);
+  assert.equal(s(75), 75);
   assert.equal(s(96.5), 100);
   assert.equal(s(60), 60);
-  assert.equal(s(33.4), 33);
   assert.equal(s(4), 10);
   assert.equal(s(140), 100);
   assert.equal(s('abc'), 100);
-  deepEq(plain(Core.PHOTO_WIDTH_STEPS), [25, 50, 75, 100]);
+});
+
+test('a third keeps its exact value; other widths are freeform overrides kept as whole %', () => {
+  const v = Core.validPhotoWidth;
+  assert.equal(v(100 / 3), 100 / 3);
+  assert.equal(v(JSON.parse(JSON.stringify(100 / 3))), 100 / 3);
+  assert.equal(v(25), 25);
+  assert.equal(v(75), 75);
+  assert.equal(v(33.4), 33);
+  assert.equal(v(5), null);
+  deepEq(Core.cellDisplay({ photoWidth: 100 / 3 }, 'obs').photoWidth, 100 / 3);
+  deepEq(Core.cellDisplay({ photoWidth: 75 }, 'obs').photoWidth, 75);
+});
+
+test('photo width labels round to a whole %', () => {
+  assert.equal(Core.photoWidthLabel(100 / 3), '33%');
+  assert.equal(Core.photoWidthLabel(50), '50%');
 });
 
 test('cell display defaults: 100 % wide, table left, general observations centered', () => {

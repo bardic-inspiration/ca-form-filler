@@ -61,8 +61,9 @@ them as PDFs that match the Word template.
    above it with **Crop**, **Rotate**, **Edit** (the photo editor) and
    **Remove**. With the keyboard, Tab to a photo and press Enter.
 4. **Size a photo:** drag a corner handle of the selected photo. The width it
-   will have in the PDF is shown while you drag and snaps to 25, 50, 75 and
-   100 % of the box. Narrower photos sit side by side.
+   will have in the PDF is shown while you drag and snaps to a full, half or
+   third of the box's width. Two halves or three thirds fill a row exactly;
+   any other width is kept as you drag it. Narrower photos sit side by side.
 5. **Crop in place:** tap **Crop**. The whole photo shows with the cut-off
    part dimmed. Drag the corner or side handles to resize the crop, or drag
    inside it to move it. Tap **✓** (or press Enter, or tap anywhere else) to

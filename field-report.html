@@ -53,7 +53,10 @@ const DEFAULT_COLUMN_WIDTHS = [8, 36, 32, 24];
 const PDF_COLUMN_WIDTHS = [8, 38, 33, 21];
 const PHOTO_UPLOAD_MAX_SIDE = 1600;
 const PHOTO_UPLOAD_QUALITY = 0.85;
-const PHOTO_WIDTH_STEPS = [25, 50, 75, 100]; // % of the photo cell
+// Photo sizes as % of the photo cell: full, half and third of a row. The
+// widths subtract the gaps (css — photos), so 2 halves or 3 thirds fill a row.
+const PHOTO_SIZE_PRESETS = [{ width: 100, label: 'Full' }, { width: 50, label: 'Half' }, { width: 100 / 3, label: 'Third' }];
+const PHOTO_WIDTH_STEPS = PHOTO_SIZE_PRESETS.map((p) => p.width);
 const PHOTO_WIDTH_MIN = 10;
 const PHOTO_WIDTH_SNAP = 4; // snap to a step within this many %
 const PHOTO_MAX_HEIGHT_RANGE = [1, 6]; // inches
@@ -321,10 +324,16 @@ function printColumnWidths(report) {
 
 /* ==== SECTION: core — photo display ==== */
 
-// A number in 10–100 (rounded), else null.
+// A number in 10–100, else null. Presets are kept exact (a third isn't a
+// whole %); any other width is a freeform override, rounded to a whole %.
 function validPhotoWidth(value) {
   const n = typeof value === 'number' ? value : NaN;
-  return n >= PHOTO_WIDTH_MIN && n <= 100 ? Math.round(n) : null;
+  if (!(n >= PHOTO_WIDTH_MIN && n <= 100)) return null;
+  return PHOTO_WIDTH_STEPS.includes(n) ? n : Math.round(n);
+}
+
+function photoWidthLabel(pct) {
+  return Math.round(pct) + '%';
 }
 
 function snapPhotoWidth(pct) {
@@ -761,12 +770,12 @@ function formatDebugReport({ userAgent = '', capabilities = {}, entries = [], no
 
 const Core = Object.freeze({
   DEFAULT_CONFIG, DEFAULT_LOGO, APP_ID, SCHEMA_VERSION, TAG_COLORS, NUMBERING_PRESETS, CSV_COLUMNS,
-  DEFAULT_COLUMN_WIDTHS, PDF_COLUMN_WIDTHS, PHOTO_WIDTH_STEPS,
+  DEFAULT_COLUMN_WIDTHS, PDF_COLUMN_WIDTHS, PHOTO_SIZE_PRESETS, PHOTO_WIDTH_STEPS,
   uuid, clone, pad, isoDate, formatDate, toLetters, moveById, isEmbeddedWebView, sha256Hex, passwordMatches,
   createReport, formatAttendee, createObservation, createGeneralObservation, createPhoto, setStatus, reportTitle,
   formatItemNumber, renumber, nextReportFrom, reminderGroups,
   tagUsage, deleteTag, matchesFilter, printColumnWidths,
-  snapPhotoWidth, cellDisplay, effectivePhotoWidth, photoMaxHeightIn, printPhotoCellWidthIn, photoScale, photoLayout, movePhoto, stepPhoto,
+  validPhotoWidth, snapPhotoWidth, photoWidthLabel, cellDisplay, effectivePhotoWidth, photoMaxHeightIn, printPhotoCellWidthIn, photoScale, photoLayout, movePhoto, stepPhoto,
   rotateCrop90, resizeCrop, normalizeCrop,
   History, snapshotReport, restoreSnapshot,
   fileBaseName, referencedPhotoIds, serializeReport, migrate, normalizeReport, parseReport,
@@ -2884,7 +2893,7 @@ function setPhotoSelected(fig, on) {
   }
   fig.append(
     ...PHOTO_CORNERS.map((corner) => h('span', { class: 'photo-handle', dataset: { corner }, 'aria-hidden': 'true' })),
-    h('span', { class: 'photo-size' }, fig.style.getPropertyValue('--w') + '%'));
+    h('span', { class: 'photo-size' }, photoWidthLabel(fig.style.getPropertyValue('--w'))));
   showFloatingToolbar(fig, photoToolbarActions(fig), { label: 'Photo actions' });
 }
 
@@ -2985,7 +2994,7 @@ function startPhotoResize(e, handle) {
   const label = $('.photo-size', fig);
   let pct = startPct;
   handle.setPointerCapture(e.pointerId);
-  const show = (value) => { fig.style.setProperty('--w', value); if (label) label.textContent = value + '%'; };
+  const show = (value) => { fig.style.setProperty('--w', value); if (label) label.textContent = photoWidthLabel(value); };
   const move = (ev) => {
     const width = startWidth + sign * factor * (ev.clientX - e.clientX);
     pct = snapPhotoWidth(((width + gap) / (flowWidth + gap)) * 100);
@@ -3031,7 +3040,7 @@ function showPhotoCellMenu(anchor, target) {
     }, text))),
   ];
   showPopover(anchor, h('div', { class: 'photo-menu' },
-    choice('Default photo width', PHOTO_WIDTH_STEPS.map((w) => [w, w + '%']), cell.photoWidth,
+    choice('Default photo width', PHOTO_SIZE_PRESETS.map((p) => [p.width, p.label]), cell.photoWidth,
       (w) => { display.photoWidth = w; }),
     choice('Alignment', [['left', 'Left'], ['center', 'Center']], cell.photoAlign,
       (a) => { display.photoAlign = a; }),
