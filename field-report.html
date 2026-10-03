@@ -58,6 +58,7 @@ const PHOTO_WIDTH_MIN = 10;
 const PHOTO_WIDTH_SNAP = 4; // snap to a step within this many %
 const PHOTO_MAX_HEIGHT_RANGE = [1, 6]; // inches
 const PRINT_CONTENT_WIDTH_IN = 6.5; // Letter minus 1in side margins
+const PHOTO_GAP_IN = 5 / 96; // space between photos in the PDF (5 CSS px)
 const HISTORY_LIMIT = 100;
 
 const TAG_COLORS = {
@@ -359,14 +360,24 @@ function printPhotoCellWidthIn(report, kind) {
   const pt = (n) => n / 72;
   if (kind === 'gen') return PRINT_CONTENT_WIDTH_IN - pt(5 + 2 + 12 + 36 + 4);
   const table = PRINT_CONTENT_WIDTH_IN - pt(6);
-  return table * (printColumnWidths(report)[2] / 100) - 10 / 96;
+  // Less the photo cell's 5px padding and its share of the collapsed borders (½ × 1pt per side).
+  return table * (printColumnWidths(report)[2] / 100) - 10 / 96 - pt(1);
 }
 
+// Photo geometry of a cell kind in the PDF. The ratios (to the cell width)
+// let the editor draw the same layout at any cell width.
+function photoScale(report, kind) {
+  const cellWidthIn = printPhotoCellWidthIn(report, kind);
+  const maxHeightIn = photoMaxHeightIn(report.config, kind);
+  return { maxHeightIn, gapIn: PHOTO_GAP_IN, capRatio: maxHeightIn / cellWidthIn, gapRatio: PHOTO_GAP_IN / cellWidthIn };
+}
+
+// Drives both the editor (photoCell) and the PDF (printPhotoFlow).
 function photoLayout(report, kind, display, ids) {
   const cell = cellDisplay(display, kind);
   return {
+    ...photoScale(report, kind),
     align: cell.photoAlign,
-    maxHeightIn: photoMaxHeightIn(report.config, kind),
     photos: ids.filter((id) => report.photos[id])
       .map((id) => ({ id, width: effectivePhotoWidth(report.photos[id], cell) })),
   };
@@ -755,7 +766,7 @@ const Core = Object.freeze({
   createReport, formatAttendee, createObservation, createGeneralObservation, createPhoto, setStatus, reportTitle,
   formatItemNumber, renumber, nextReportFrom, reminderGroups,
   tagUsage, deleteTag, matchesFilter, printColumnWidths,
-  snapPhotoWidth, cellDisplay, effectivePhotoWidth, photoMaxHeightIn, printPhotoCellWidthIn, photoLayout, movePhoto, stepPhoto,
+  snapPhotoWidth, cellDisplay, effectivePhotoWidth, photoMaxHeightIn, printPhotoCellWidthIn, photoScale, photoLayout, movePhoto, stepPhoto,
   rotateCrop90, resizeCrop, normalizeCrop,
   History, snapshotReport, restoreSnapshot,
   fileBaseName, referencedPhotoIds, serializeReport, migrate, normalizeReport, parseReport,
@@ -973,18 +984,21 @@ body.is-sorting { cursor: grabbing; user-select: none; }
 }
 .photo-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .photo-cell.drag-over { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
-/* Flow layout. --w: the photo's width in % of the cell. --cap-h: its max
-   height (screen: the print cap scaled by --cap-ratio, the cap over the print
-   cell width). --ar: the image's aspect ratio, set on load, so a capped photo
-   narrows instead of leaving a gap. */
-.photo-flow, .pr-flow { --gap: 5px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--gap); }
+/* Flow layout, shared by the editor and the PDF (photoLayout()). --w: the
+   photo's width in % of the cell. --gap and --cap-h: the space between photos
+   and their max height; on screen, the PDF's scaled by the cell width (via
+   --gap-ratio and --cap-ratio), so the editor is a scaled copy of the PDF at
+   any viewport width. --ar: the image's aspect ratio, set on load, so a capped
+   photo narrows instead of leaving a gap. */
+.photo-flow, .pr-flow { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--gap); }
 .photo-flow.align-center, .pr-flow.align-center { justify-content: center; }
 .photo, .pr-fig {
   width: min(calc(var(--w, 100) * 1% - var(--gap) * (1 - var(--w, 100) / 100)), calc(var(--cap-h) * var(--ar, 1000)));
 }
+.photo-flow { --gap: calc(var(--gap-ratio, 0) * 100cqw); }
 .photo { --cap-h: calc(var(--cap-ratio, 100) * 100cqw); position: relative; margin: 0; line-height: 0; }
 .photo img {
-  display: block; width: 100%; height: auto; min-height: 40px;
+  display: block; width: 100%; height: auto;
   max-height: var(--cap-h); object-fit: contain; object-position: left top;
 }
 .photo-flow.align-center img, .pr-flow.align-center img { object-position: center top; }
@@ -2456,7 +2470,7 @@ function initColumnResize(table) {
       const up = () => {
         grip.removeEventListener('pointermove', move);
         grip.classList.remove('active');
-        if (widths !== start) { state.report.ui.columnWidths = widths; markDirty(); updatePhotoCaps(); }
+        if (widths !== start) { state.report.ui.columnWidths = widths; markDirty(); updatePhotoScale(); }
       };
       grip.addEventListener('pointermove', move);
       grip.addEventListener('pointerup', up, { once: true });
@@ -2465,7 +2479,7 @@ function initColumnResize(table) {
       state.report.ui.columnWidths = DEFAULT_COLUMN_WIDTHS.slice();
       apply(state.report.ui.columnWidths);
       markDirty();
-      updatePhotoCaps();
+      updatePhotoScale();
     });
   });
 }
@@ -2536,15 +2550,15 @@ function photoCellDisplay(target) {
   return item ? item.display : {};
 }
 
-// Screen max height as a multiple of the cell width: the print cap over the print cell width.
-function photoCapRatio(kind) {
-  const r = state.report;
-  return photoMaxHeightIn(r.config, kind) / printPhotoCellWidthIn(r, kind);
+// The PDF's height cap and photo gap, as multiples of the cell width (see css — photos).
+function setPhotoScale(cell, { capRatio, gapRatio }) {
+  cell.style.setProperty('--cap-ratio', capRatio);
+  cell.style.setProperty('--gap-ratio', gapRatio);
 }
 
-function updatePhotoCaps() {
+function updatePhotoScale() {
   for (const cell of $$('.photo-cell[data-target]')) {
-    cell.style.setProperty('--cap-ratio', photoCapRatio(cell.dataset.target.split(':')[0]));
+    setPhotoScale(cell, photoScale(state.report, cell.dataset.target.split(':')[0]));
   }
 }
 
@@ -2555,7 +2569,7 @@ function photoCell(target, ids, { readOnly = false, compact = false } = {}) {
     class: 'photo-cell' + (compact ? ' compact' : ''), dataset: { target },
     tabindex: readOnly ? null : '0', 'aria-label': readOnly ? null : 'Photos. Drop, paste or click to add.',
   });
-  cell.style.setProperty('--cap-ratio', photoCapRatio(kind));
+  setPhotoScale(cell, layout);
   if (layout.photos.length) {
     cell.append(h('div', { class: 'photo-flow' + (layout.align === 'center' ? ' align-center' : '') },
       layout.photos.map(({ id, width }) => photoFigure(state.report.photos[id], readOnly, width))));
@@ -4208,6 +4222,7 @@ function printPhotoFlow(kind, display, ids, urlFor) {
       return fig;
     }));
   flow.style.setProperty('--cap', layout.maxHeightIn + 'in');
+  flow.style.setProperty('--gap', layout.gapIn + 'in');
   return flow;
 }
 
@@ -4651,7 +4666,7 @@ function bindGlobalEvents() {
     if (key === 'carryForward' || key === '*') { renderObservations(); renderReminders(); }
     if (key === 'disclaimer' || key === '*') renderHeader();
     if (key === 'autosaveSeconds' || key === '*') restartAutosaveTimer();
-    if (/^(photoMaxHeight|pdfUseScreenWidths$)/.test(key) || key === '*') updatePhotoCaps();
+    if (/^(photoMaxHeight|pdfUseScreenWidths$)/.test(key) || key === '*') updatePhotoScale();
   });
 }
 
