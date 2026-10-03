@@ -205,6 +205,7 @@ async function addTwoPhotos(cdp) {
       photo.display.width = 25;
     }
     ${PHOTO()}.display.width = 25;
+    state.report.observations[0].display.photoMode = 'manual';
     renderAll();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   })()`, { awaitPromise: true });

@@ -60,26 +60,34 @@ them as PDFs that match the Word template.
 3. **Photo toolbar:** tap or click a photo to select it. A toolbar appears
    above it with **Crop**, **Rotate**, **Edit** (the photo editor) and
    **Remove**. With the keyboard, Tab to a photo and press Enter.
-4. **Size a photo:** drag a corner handle of the selected photo. The width it
+4. **Automatic sizes:** photos in a box size themselves from how many there
+   are: two halves side by side per row, and a last odd photo full width
+   (1 photo: full; 2: two halves; 3: two halves and a full one). Adding or
+   removing a photo re-arranges the box. To pick another layout (all full
+   width, or thirds), use **Layout** in the box's **⋯** menu.
+5. **Size a photo:** drag a corner handle of the selected photo. The width it
    will have in the PDF is shown while you drag and snaps to a full, half or
    third of the box's width. Two halves or three thirds fill a row exactly;
    any other width is kept as you drag it. Narrower photos sit side by side.
-5. **Crop in place:** tap **Crop**. The whole photo shows with the cut-off
+   Once you size a photo the box stops arranging itself: adding or removing
+   photos leaves the other sizes alone. Picking a **Layout** makes it
+   automatic again.
+6. **Crop in place:** tap **Crop**. The whole photo shows with the cut-off
    part dimmed. Drag the corner or side handles to resize the crop, or drag
    inside it to move it. Tap **✓** (or press Enter, or tap anywhere else) to
    keep the crop, or **✕** (or Esc) to cancel. The crop can be widened again
    later, and Ctrl+Z undoes it.
-6. **Rotate:** tap **Rotate** to turn the photo 90° clockwise (the same as in
+7. **Rotate:** tap **Rotate** to turn the photo 90° clockwise (the same as in
    the photo editor). Ctrl+Z undoes it.
-7. **Set a whole box:** the **⋯** button under a photo box sets the default
-   width and the alignment (left or center) of its photos. *Reset photos to
-   cell default* clears sizes set on single photos. General Observations
-   photos work the same way.
-8. The screen shows the same layout as the PDF, scaled to fit: the same
+8. **Set a whole box:** the **⋯** button under a photo box sets the default
+   width (this stops automatic sizing) and the alignment (left or center) of
+   its photos. *Reset photos to cell default* clears sizes set on single
+   photos. General Observations photos work the same way.
+9. The screen shows the same layout as the PDF, scaled to fit: the same
    photo sizes, the same photos side by side, at any screen size. On a phone
    the whole box shrinks rather than rearranging. Tall photos are limited to
    a maximum height (see Settings → PDF).
-9. **Edit** opens the photo editor:
+10. **Edit** opens the photo editor:
    - tools: select/move, circle, arrow, pen, line, dimension (a line with a
      label such as 19"), text, and crop;
    - pick a color and a line thickness before drawing;
@@ -87,7 +95,7 @@ them as PDFs that match the Word template.
      drag (or drag with two fingers) to move around;
    - rotate turns a sideways photo; *Reset crop* undoes cropping;
    - select a drawing and press Delete to remove it.
-10. Click **Save** to keep your changes, or **Cancel**. Drawings stay
+11. Click **Save** to keep your changes, or **Cancel**. Drawings stay
     editable later, and Ctrl+Z undoes a saved edit.
 
 ## 5. Saving and opening

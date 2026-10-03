@@ -28,7 +28,7 @@ const setup = `(async () => {
   for (const { cell, photos } of ${JSON.stringify(CELLS)}) {
     addObservation();
     const o = state.report.observations.at(-1);
-    o.display = { photoWidth: cell };
+    o.display = { photoWidth: cell, photoMode: 'manual' };
     for (const width of photos) {
       const photo = createPhoto(wide, 'p.jpg');
       if (width != null) photo.display = { ...photo.display, width };
