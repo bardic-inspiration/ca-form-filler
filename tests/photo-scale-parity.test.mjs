@@ -32,10 +32,13 @@ const setup = `(async () => {
   });
   for (const widths of ${JSON.stringify(OBS_WIDTHS)}) {
     addObservation();
-    state.report.observations.at(-1).photoIds.push(...photos(widths));
+    const o = state.report.observations.at(-1);
+    o.display.photoMode = 'manual';
+    o.photoIds.push(...photos(widths));
   }
   for (const widths of ${JSON.stringify(GEN_WIDTHS)}) {
     const g = createGeneralObservation();
+    g.display.photoMode = 'manual';
     g.images.push(...photos(widths));
     state.report.generalObservations.push(g);
   }
