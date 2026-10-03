@@ -64,13 +64,15 @@ them as PDFs that match the Word template.
    are: two halves side by side per row, and a last odd photo full width
    (1 photo: full; 2: two halves; 3: two halves and a full one). Adding or
    removing a photo re-arranges the box. To pick another layout (all full
-   width, or thirds), use **Layout** in the box's **⋯** menu.
+   width, or thirds), use **Layout** in the box's **⋯** menu. Photos always
+   line up on the left.
 5. **Size a photo:** drag a corner handle of the selected photo. The width it
    will have in the PDF is shown while you drag and snaps to a full, half or
    third of the box's width. Two halves or three thirds fill a row exactly;
    any other width is kept as you drag it. Narrower photos sit side by side.
-   Once you size a photo the box stops arranging itself: adding or removing
-   photos leaves the other sizes alone. Picking a **Layout** makes it
+   Once you touch a corner handle the box stops arranging itself: adding or
+   removing photos leaves the other sizes alone, and a **Reset** button
+   appears under the box. Tap **Reset** (or pick a **Layout**) to make it
    automatic again.
 6. **Crop in place:** tap **Crop**. The whole photo shows with the cut-off
    part dimmed. Drag the corner or side handles to resize the crop, or drag
@@ -79,10 +81,9 @@ them as PDFs that match the Word template.
    later, and Ctrl+Z undoes it.
 7. **Rotate:** tap **Rotate** to turn the photo 90° clockwise (the same as in
    the photo editor). Ctrl+Z undoes it.
-8. **Set a whole box:** the **⋯** button under a photo box sets the default
-   width (this stops automatic sizing) and the alignment (left or center) of
-   its photos. *Reset photos to cell default* clears sizes set on single
-   photos. General Observations photos work the same way.
+8. **Set a whole box:** the **⋯** button under a photo box picks its
+   **Layout**, or a default width for its photos (this stops automatic
+   sizing). General Observations photos work the same way.
 9. The screen shows the same layout as the PDF, scaled to fit: the same
    photo sizes, the same photos side by side, at any screen size. On a phone
    the whole box shrinks rather than rearranging. Tall photos are limited to

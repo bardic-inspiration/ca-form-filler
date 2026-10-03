@@ -179,3 +179,16 @@ test('choosing an arrangement is one undo step', () => {
   Core.restoreSnapshot(r, history.redo(Core.snapshotReport(r)));
   deepEq(widths(r, r.observations[0]), [T, T, T]);
 });
+
+// Issue #43: Reset makes a manual cell automatic again.
+test('resetting a manual cell clears every size override and re-applies the default arrangement', () => {
+  const { r, o } = reportWith(3);
+  Core.makePhotoCellManual(r, 'obs', o.display, o.photoIds);
+  o.display.photoWidth = 100 / 3;
+  r.photos[o.photoIds[0]].display.width = 70;
+  Core.resetPhotoCell(r, o.display, o.photoIds);
+  deepEq(o.display, {});
+  deepEq(o.photoIds.map((id) => r.photos[id].display), [{}, {}, {}]);
+  assert.equal(Core.cellDisplay(o.display, 'obs').photoMode, 'auto');
+  deepEq(widths(r, o), [H, H, F]);
+});
