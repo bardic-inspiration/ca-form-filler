@@ -381,14 +381,73 @@ function photoScale(report, kind) {
   return { maxHeightIn, gapIn: PHOTO_GAP_IN, capRatio: maxHeightIn / cellWidthIn, gapRatio: PHOTO_GAP_IN / cellWidthIn };
 }
 
+// Layouts for `count` photos as widths in order: rows of two halves, of one
+// full photo, or of three thirds; a last partial row is split evenly, so every
+// row is full. The first (rows of two) is the default.
+function autoArrangements(count) {
+  const n = Math.max(0, Math.floor(Number(count)) || 0);
+  const out = [];
+  for (const perRow of [2, 1, 3]) {
+    const rest = n % perRow;
+    const widths = Array.from({ length: n }, (_, i) => (i < n - rest ? 100 / perRow : 100 / rest));
+    if (!out.some((a) => a.every((w, i) => w === widths[i]))) out.push(widths);
+  }
+  return out;
+}
+
+// 'auto' (sizes follow the photo count) or 'manual' (each photo keeps its
+// size). A cell without `sizing` (older reports) is manual if it has a width.
+function photoSizing(report, display, ids) {
+  const d = display || {};
+  if (d.sizing === 'auto' || d.sizing === 'manual') return d.sizing;
+  const sized = (id) => report.photos[id] && validPhotoWidth(report.photos[id].display.width);
+  return validPhotoWidth(d.photoWidth) || ids.some(sized) ? 'manual' : 'auto';
+}
+
+// An automatic cell's widths: the picked arrangement if it fits the count, else the default.
+function cellArrangement(display, count) {
+  const options = autoArrangements(count);
+  const picked = display && display.arrangement;
+  const same = (a) => Array.isArray(picked) && a.length === picked.length && a.every((w, i) => w === picked[i]);
+  return options.find(same) || options[0];
+}
+
+// Before photos are added to or removed from a cell: pin its sizing, and let
+// an automatic cell fall back to the default arrangement.
+function photosChanging(report, display, ids) {
+  display.sizing = photoSizing(report, display, ids);
+  if (display.sizing === 'auto') delete display.arrangement;
+}
+
+// The user sized a photo: an automatic cell becomes manual, each photo keeping its width.
+function setManualSizing(report, kind, display, ids) {
+  if (photoSizing(report, display, ids) === 'auto') {
+    for (const { id, width } of photoLayout(report, kind, display, ids).photos) {
+      report.photos[id].display = { ...report.photos[id].display, width };
+    }
+  }
+  display.sizing = 'manual';
+  delete display.arrangement;
+}
+
+// Pick one of autoArrangements(): the cell is automatic, photo sizes cleared.
+function setArrangement(report, display, ids, widths) {
+  display.sizing = 'auto';
+  display.arrangement = widths.slice();
+  for (const id of ids) if (report.photos[id]) delete report.photos[id].display.width;
+}
+
 // Drives both the editor (photoCell) and the PDF (printPhotoFlow).
 function photoLayout(report, kind, display, ids) {
   const cell = cellDisplay(display, kind);
+  const present = ids.filter((id) => report.photos[id]);
+  const sizing = photoSizing(report, display, present);
+  const auto = sizing === 'auto' && cellArrangement(display, present.length);
   return {
     ...photoScale(report, kind),
     align: cell.photoAlign,
-    photos: ids.filter((id) => report.photos[id])
-      .map((id) => ({ id, width: effectivePhotoWidth(report.photos[id], cell) })),
+    sizing,
+    photos: present.map((id, i) => ({ id, width: auto ? auto[i] : effectivePhotoWidth(report.photos[id], cell) })),
   };
 }
 
@@ -775,7 +834,8 @@ const Core = Object.freeze({
   createReport, formatAttendee, createObservation, createGeneralObservation, createPhoto, setStatus, reportTitle,
   formatItemNumber, renumber, nextReportFrom, reminderGroups,
   tagUsage, deleteTag, matchesFilter, printColumnWidths,
-  validPhotoWidth, snapPhotoWidth, photoWidthLabel, cellDisplay, effectivePhotoWidth, photoMaxHeightIn, printPhotoCellWidthIn, photoScale, photoLayout, movePhoto, stepPhoto,
+  validPhotoWidth, snapPhotoWidth, photoWidthLabel, cellDisplay, effectivePhotoWidth, photoMaxHeightIn, printPhotoCellWidthIn, photoScale,
+  autoArrangements, photoSizing, cellArrangement, photosChanging, setManualSizing, setArrangement, photoLayout, movePhoto, stepPhoto,
   rotateCrop90, resizeCrop, normalizeCrop,
   History, snapshotReport, restoreSnapshot,
   fileBaseName, referencedPhotoIds, serializeReport, migrate, normalizeReport, parseReport,
@@ -1036,6 +1096,10 @@ body.is-sorting { cursor: grabbing; user-select: none; }
 .photo-cell-menu { grid-column: 3; justify-self: end; }
 .photo-menu { display: flex; flex-direction: column; gap: 6px; }
 .photo-menu .segmented button { min-width: 52px; min-height: 36px; }
+.layout-picker button { display: flex; align-items: center; justify-content: center; padding: 6px 10px; }
+.layout-diagram { display: flex; flex-direction: column; gap: 2px; width: 30px; }
+.layout-row { display: flex; gap: 2px; }
+.layout-photo { flex: 1; height: 6px; border-radius: 1px; background: currentColor; opacity: 0.55; }
 /* In-cell crop: the full photo at a fixed width, the outside dimmed. */
 .photo-cell[tabindex] .photo.cropping { cursor: default; }
 .photo.cropping img { max-height: none; }
@@ -2536,6 +2600,7 @@ async function addPhotosTo(target, files, beforeId = null) {
   const list = photoList(target);
   if (!images.length || !list) return;
   checkpoint();
+  photosChanging(state.report, photoCellDisplay(target), list);
   showBusy(images.length > 1 ? `Adding ${images.length} photos…` : 'Adding photo…');
   try {
     for (const file of images) {
@@ -2867,6 +2932,11 @@ function dropPhoto(from, to, photoId, beforeId) {
   const dest = photoList(to);
   if (!src || !dest) return;
   const before = snapshotReport(state.report);
+  // Between cells the move always happens: both cells' counts change.
+  if (to !== from && src.includes(photoId) && photoId !== beforeId) {
+    photosChanging(state.report, photoCellDisplay(from), src);
+    photosChanging(state.report, photoCellDisplay(to), dest);
+  }
   if (!movePhoto(src, dest, photoId, beforeId)) return;
   checkpoint(before);
   markDirty();
@@ -2941,6 +3011,7 @@ function removePhoto(target, photoId) {
   const list = photoList(target);
   if (!list || !list.includes(photoId)) return;
   checkpoint();
+  photosChanging(state.report, photoCellDisplay(target), list);
   list.splice(list.indexOf(photoId), 1);
   if (state.selectedPhotoId === photoId) state.selectedPhotoId = null;
   markDirty();
@@ -2977,7 +3048,8 @@ function bindPhotoResize() {
 }
 
 // Drag a corner: width follows the pointer (both edges move when centered),
-// snaps via snapPhotoWidth(), and is saved as the photo's override on release.
+// snaps via snapPhotoWidth(), and is saved as the photo's override on release;
+// the cell becomes manual (setManualSizing()).
 function startPhotoResize(e, handle) {
   e.preventDefault();
   e.stopPropagation();
@@ -3006,6 +3078,7 @@ function startPhotoResize(e, handle) {
     handle.removeEventListener('pointercancel', cancel);
     if (!commit || pct === startPct) { show(startPct); return; }
     checkpoint();
+    setManualSizing(state.report, target.split(':')[0], photoCellDisplay(target), photoList(target));
     photo.display = { ...photo.display, width: pct };
     markDirty();
     refreshPhotoCell(target);
@@ -3017,13 +3090,18 @@ function startPhotoResize(e, handle) {
   handle.addEventListener('pointercancel', cancel);
 }
 
-// Cell ⋯ menu: default width and alignment, and reset of per-photo widths.
+// Cell ⋯ menu: layout (automatic arrangements), default width and alignment,
+// and reset of per-photo widths. Each choice is one undo step.
 function showPhotoCellMenu(anchor, target) {
   const r = state.report;
   const kind = target.split(':')[0];
   const display = photoCellDisplay(target);
   const cell = cellDisplay(display, kind);
-  const overridden = photoList(target).filter((id) => r.photos[id] && validPhotoWidth(r.photos[id].display.width));
+  const ids = photoList(target).filter((id) => r.photos[id]);
+  const auto = photoSizing(r, display, ids) === 'auto';
+  const current = auto ? cellArrangement(display, ids.length) : null;
+  const arrangements = autoArrangements(ids.length);
+  const overridden = ids.filter((id) => validPhotoWidth(r.photos[id].display.width));
   const apply = (change) => {
     checkpoint();
     change();
@@ -3039,16 +3117,50 @@ function showPhotoCellMenu(anchor, target) {
       onclick: () => { if (value !== current) apply(() => onPick(value)); },
     }, text))),
   ];
+  const layout = arrangements.length > 1 ? [
+    h('div', { class: 'field-label' }, 'Layout'),
+    h('div', { class: 'segmented layout-picker', role: 'group', 'aria-label': 'Layout' }, arrangements.map((widths) => {
+      const on = !!current && current.every((w, i) => w === widths[i]);
+      return h('button', {
+        type: 'button', 'aria-pressed': String(on), 'aria-label': arrangementLabel(widths), title: arrangementLabel(widths),
+        onclick: () => { if (!on) apply(() => setArrangement(r, display, ids, widths)); },
+      }, arrangementDiagram(widths));
+    })),
+  ] : [];
   showPopover(anchor, h('div', { class: 'photo-menu' },
-    choice('Default photo width', PHOTO_SIZE_PRESETS.map((p) => [p.width, p.label]), cell.photoWidth,
-      (w) => { display.photoWidth = w; }),
+    ...layout,
+    choice('Default photo width', PHOTO_SIZE_PRESETS.map((p) => [p.width, p.label]), auto ? null : cell.photoWidth,
+      (w) => { display.sizing = 'manual'; delete display.arrangement; display.photoWidth = w; }),
     choice('Alignment', [['left', 'Left'], ['center', 'Center']], cell.photoAlign,
       (a) => { display.photoAlign = a; }),
     h('hr'),
     h('button', {
-      type: 'button', class: 'menu-item', disabled: !overridden.length,
-      onclick: () => apply(() => overridden.forEach((id) => { delete r.photos[id].display.width; })),
+      type: 'button', class: 'menu-item', disabled: auto || !overridden.length,
+      onclick: () => apply(() => { display.sizing = 'manual'; overridden.forEach((id) => { delete r.photos[id].display.width; }); }),
     }, 'Reset photos to cell default')));
+}
+
+// Widths split into rows (each row sums to 100).
+function arrangementRows(widths) {
+  const rows = [];
+  let sum = 100;
+  for (const w of widths) {
+    if (sum >= 100 - 1e-9) { rows.push([]); sum = 0; }
+    rows[rows.length - 1].push(w);
+    sum += w;
+  }
+  return rows;
+}
+
+function arrangementLabel(widths) {
+  const name = (w) => (PHOTO_SIZE_PRESETS.find((p) => p.width === w) || { label: photoWidthLabel(w) }).label;
+  return arrangementRows(widths).map((row) => row.map(name).join(' + ')).join(', then ');
+}
+
+// Small picture of an arrangement: one bar per row, split into its photos.
+function arrangementDiagram(widths) {
+  return h('span', { class: 'layout-diagram', 'aria-hidden': 'true' }, arrangementRows(widths).map((row) =>
+    h('span', { class: 'layout-row' }, row.map(() => h('span', { class: 'layout-photo' })))));
 }
 
 /* ==== SECTION: app — photos: in-cell crop and rotate ==== */

@@ -60,10 +60,18 @@ them as PDFs that match the Word template.
 3. **Photo toolbar:** tap or click a photo to select it. A toolbar appears
    above it with **Crop**, **Rotate**, **Edit** (the photo editor) and
    **Remove**. With the keyboard, Tab to a photo and press Enter.
-4. **Size a photo:** drag a corner handle of the selected photo. The width it
+4. **Automatic sizes:** a photo box sizes its photos by how many it holds:
+   two side by side per row, and a lone last photo at full width. Add or
+   remove a photo and the box rearranges. To choose another layout (all full
+   width, or three per row), open the **⋯** button under the box and pick one
+   under **Layout**; the box stays automatic.
+   **Size a photo:** drag a corner handle of the selected photo. The width it
    will have in the PDF is shown while you drag and snaps to a full, half or
    third of the box's width. Two halves or three thirds fill a row exactly;
    any other width is kept as you drag it. Narrower photos sit side by side.
+   Once you size a photo, the box keeps every photo's size: new photos are
+   added at the box's default width and the others don't change. Picking a
+   **Layout** makes it automatic again.
 5. **Crop in place:** tap **Crop**. The whole photo shows with the cut-off
    part dimmed. Drag the corner or side handles to resize the crop, or drag
    inside it to move it. Tap **✓** (or press Enter, or tap anywhere else) to

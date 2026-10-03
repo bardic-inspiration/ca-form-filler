@@ -431,6 +431,7 @@ test('photo layout lists existing photos with effective widths, alignment and ca
   deepEq(layout, {
     ...Core.photoScale(r, 'obs'),
     align: 'center',
+    sizing: 'manual',
     photos: [{ id: a.id, width: 50 }, { id: b.id, width: 75 }],
   });
 });
