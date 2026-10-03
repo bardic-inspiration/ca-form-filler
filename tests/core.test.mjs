@@ -377,14 +377,14 @@ test('photo width labels round to a whole %', () => {
   assert.equal(Core.photoWidthLabel(50), '50%');
 });
 
-test('cell display defaults: automatic, 100 % wide, table left, general observations centered', () => {
+test('cell display defaults: automatic, 100 % wide; there is no alignment', () => {
   const auto = { photoMode: 'auto', photoArrangement: null };
-  deepEq(Core.cellDisplay({}, 'obs'), { photoWidth: 100, photoAlign: 'left', ...auto });
-  deepEq(Core.cellDisplay(undefined, 'gen'), { photoWidth: 100, photoAlign: 'center', ...auto });
+  deepEq(Core.cellDisplay({}, 'obs'), { photoWidth: 100, ...auto });
+  deepEq(Core.cellDisplay(undefined, 'gen'), { photoWidth: 100, ...auto });
   deepEq(Core.cellDisplay({ photoWidth: 50, photoAlign: 'center', photoMode: 'manual' }, 'obs'),
-    { photoWidth: 50, photoAlign: 'center', photoMode: 'manual', photoArrangement: null });
-  deepEq(Core.cellDisplay({ photoWidth: 'fit', photoAlign: 'right', photoMode: 'x', photoArrangement: '2-1' }, 'obs'),
-    { photoWidth: 100, photoAlign: 'left', photoMode: 'auto', photoArrangement: '2-1' });
+    { photoWidth: 50, photoMode: 'manual', photoArrangement: null });
+  deepEq(Core.cellDisplay({ photoWidth: 'fit', photoMode: 'x', photoArrangement: '2-1' }, 'obs'),
+    { photoWidth: 100, photoMode: 'auto', photoArrangement: '2-1' });
 });
 
 test('a photo width override wins over the cell default', () => {
@@ -423,17 +423,16 @@ test('print photo cell width follows the PDF column widths', () => {
   assert.ok(Math.abs(gen - (6.5 - 59 / 72)) < 1e-9, String(gen));
 });
 
-test('a manual photo layout lists existing photos with effective widths, alignment and cap', () => {
+test('a manual photo layout lists existing photos with effective widths and cap', () => {
   const r = sampleReport();
   const a = Core.createPhoto('data:image/jpeg;base64,AAA', 'a.jpg');
   const b = Core.createPhoto('data:image/jpeg;base64,BBB', 'b.jpg');
   b.display.width = 75;
   r.photos[a.id] = a;
   r.photos[b.id] = b;
-  const layout = Core.photoLayout(r, 'obs', { photoWidth: 50, photoAlign: 'center', photoMode: 'manual' }, [a.id, 'missing', b.id]);
+  const layout = Core.photoLayout(r, 'obs', { photoWidth: 50, photoMode: 'manual' }, [a.id, 'missing', b.id]);
   deepEq(layout, {
     ...Core.photoScale(r, 'obs'),
-    align: 'center',
     arrangement: null,
     photos: [{ id: a.id, width: 50 }, { id: b.id, width: 75 }],
   });
@@ -498,12 +497,12 @@ test('display options round-trip, and older reports get empty display objects', 
   const p = Core.createPhoto('data:image/jpeg;base64,AAA', 'a.jpg');
   p.display.width = 40;
   r.photos[p.id] = p;
-  addObservation(r, { photoIds: [p.id], display: { photoWidth: 50, photoAlign: 'center' } });
-  r.generalObservations.push({ ...Core.createGeneralObservation(), display: { photoWidth: 75, photoAlign: 'left' } });
+  addObservation(r, { photoIds: [p.id], display: { photoWidth: 50, photoMode: 'manual' } });
+  r.generalObservations.push({ ...Core.createGeneralObservation(), display: { photoWidth: 75 } });
   r.config.photoMaxHeightTable = 3.5;
   const back = Core.parseReport(Core.serializeReport(r));
-  deepEq(back.observations[0].display, { photoWidth: 50, photoAlign: 'center' });
-  deepEq(back.generalObservations[0].display, { photoWidth: 75, photoAlign: 'left' });
+  deepEq(back.observations[0].display, { photoWidth: 50, photoMode: 'manual' });
+  deepEq(back.generalObservations[0].display, { photoWidth: 75 });
   deepEq(back.photos[p.id].display, { width: 40 });
   assert.equal(back.config.photoMaxHeightTable, 3.5);
 

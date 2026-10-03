@@ -88,9 +88,9 @@ test('dragging a size handle makes the cell manual; added photos then leave exis
   assert.ok((await layoutButtons(cdp)).every((b) => b.pressed === 'false'), 'no layout is current on a manual cell');
 }));
 
-test('the Layout picker is hidden when there is only one arrangement', () => setup(async (cdp) => {
+test('the cell menu button is hidden when there is only one arrangement', () => setup(async (cdp) => {
   await addPhotos(cdp, 1);
-  await openMenu(cdp);
-  await waitUntilTrue(cdp, "!!document.querySelector('.photo-menu')");
-  assert.equal(await evaluate(cdp, "document.querySelectorAll('.layout-picker').length"), 0);
+  assert.equal(await evaluate(cdp, "document.querySelectorAll('[data-cell-menu]').length"), 0);
+  await addPhotos(cdp, 1);
+  assert.equal(await evaluate(cdp, "document.querySelectorAll('[data-cell-menu]').length"), 1);
 }));
