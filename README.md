@@ -81,9 +81,8 @@ them as PDFs that match the Word template.
    later, and Ctrl+Z undoes it.
 7. **Rotate:** tap **Rotate** to turn the photo 90° clockwise (the same as in
    the photo editor). Ctrl+Z undoes it.
-8. **Set a whole box:** the **⋯** button under a photo box picks its
-   **Layout**, or a default width for its photos (this stops automatic
-   sizing). General Observations photos work the same way.
+8. **General Observations** photos size the same way: automatic layouts,
+   **Layout** in the **⋯** menu, corner handles and **Reset**.
 9. The screen shows the same layout as the PDF, scaled to fit: the same
    photo sizes, the same photos side by side, at any screen size. On a phone
    the whole box shrinks rather than rearranging. Tall photos are limited to

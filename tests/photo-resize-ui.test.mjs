@@ -78,13 +78,13 @@ test('pressing a handle without dragging still makes the cell manual', () => set
 test('the cell menu has no alignment or per-photo reset; photos always left-align', () => setup(async (cdp) => {
   await evaluate(cdp, `state.report.generalObservations.push(Object.assign(createGeneralObservation(), { display: { photoAlign: 'center' } }));
     state.report.observations[0].display.photoAlign = 'center'; renderAll();`);
-  await addPhotos(cdp, OBS, 1);
+  await addPhotos(cdp, OBS, 2);
   await addPhotos(cdp, GEN, 1);
   await evaluate(cdp, "makePhotoCellManual(state.report, 'gen', state.report.generalObservations[0].display, state.report.generalObservations[0].images); state.report.photos[state.report.generalObservations[0].images[0]].display.width = 50; renderAll();");
   await evaluate(cdp, "document.querySelector('.obs-table [data-cell-menu]').click()");
   await waitUntilTrue(cdp, "!!document.querySelector('.photo-menu')");
   const menu = await evaluate(cdp, "document.querySelector('.photo-menu').textContent");
-  assert.ok(!/Alignment|Center|Reset photos/.test(menu), menu);
+  assert.ok(!/Alignment|Center|Reset photos|Default photo width/.test(menu), menu);
   assert.equal(await evaluate(cdp, "document.querySelectorAll('.align-center').length"), 0);
   const offsets = JSON.parse(await evaluate(cdp, `JSON.stringify([...document.querySelectorAll('.photo-flow')].map((flow) => {
     const fig = flow.querySelector('.photo').getBoundingClientRect();
@@ -124,7 +124,7 @@ for (const width of [360, 768, 1280]) {
       const r = el.getBoundingClientRect();
       return { t: el.textContent || el.getAttribute('aria-label'), w: r.width, h: r.height };
     }))`));
-    assert.ok(menu.length >= 6, JSON.stringify(menu));
+    assert.equal(menu.length, 3, JSON.stringify(menu));
     for (const b of menu) assert.ok(b.w >= 36 && b.h >= 36, `${b.t}: ${b.w}×${b.h}`);
   }, { profilePrefix: `fr-resize-ui-${width}-`, windowSize: `${width},900` }));
 }

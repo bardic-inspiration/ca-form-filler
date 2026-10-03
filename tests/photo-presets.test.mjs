@@ -87,14 +87,3 @@ for (const [label, width] of [['phone', 360], ['tablet', 768], ['desktop', 1280]
     assertFullRows(print.slice(-CELLS.length), 'print');
   }, { profilePrefix: 'fr-photo-presets-', windowSize: `${width},900` }));
 }
-
-test('the cell menu offers Full, Half and Third as the default photo width', () => withPage(async (cdp) => {
-  await unlock(cdp);
-  await evaluate(cdp, setup, { awaitPromise: true });
-  const labels = JSON.parse(await evaluate(cdp, `(() => {
-    showPhotoCellMenu(document.querySelector('.photo-cell [data-cell-menu]'), document.querySelector('.photo-cell').dataset.target);
-    const group = document.querySelector('.photo-menu [aria-label="Default photo width"]');
-    return JSON.stringify([...group.querySelectorAll('button')].map((b) => [b.textContent, b.getAttribute('aria-pressed')]));
-  })()`));
-  assert.deepEqual(labels, [['Full', 'false'], ['Half', 'true'], ['Third', 'false']]);
-}, { profilePrefix: 'fr-photo-presets-menu-' }));

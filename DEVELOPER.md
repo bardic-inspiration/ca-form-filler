@@ -44,18 +44,18 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 | app — sorting and column resize | 2477–2566 |
 | app — photos: import, cells, drag and drop | 2567–2792 |
 | app — photos: pointer drag | 2793–2959 |
-| app — photos: selection, resize and cell menu | 2960–3172 |
-| app — photos: in-cell crop and rotate | 3173–3299 |
-| app — photos: flatten and markup drawing | 3300–3512 |
-| app — photo editor | 3513–4045 |
-| app — persistence: files | 4046–4196 |
-| app — persistence: autosave (IndexedDB) | 4197–4285 |
-| app — export: CSV | 4286–4293 |
-| app — export: PDF (print) | 4294–4494 |
-| app — config panel | 4495–4684 |
-| app — office defaults (developer stub) | 4685–4699 |
-| app — password gate | 4700–4725 |
-| app — keyboard, window events and init | 4726–4828 |
+| app — photos: selection, resize and cell menu | 2960–3160 |
+| app — photos: in-cell crop and rotate | 3161–3287 |
+| app — photos: flatten and markup drawing | 3288–3500 |
+| app — photo editor | 3501–4033 |
+| app — persistence: files | 4034–4184 |
+| app — persistence: autosave (IndexedDB) | 4185–4273 |
+| app — export: CSV | 4274–4281 |
+| app — export: PDF (print) | 4282–4482 |
+| app — config panel | 4483–4672 |
+| app — office defaults (developer stub) | 4673–4687 |
+| app — password gate | 4688–4713 |
+| app — keyboard, window events and init | 4714–4816 |
 
 ## 2. Modules
 
@@ -129,8 +129,7 @@ until the user sizes a photo, then manual (`'manual'`). An automatic cell
 takes every width from an arrangement (`autoArrangements()`, the chosen
 `display.photoArrangement` or the default) and ignores photo overrides; a
 manual cell uses each photo's override, else the cell default. There is no
-toggle: `makePhotoCellManual()` runs on any handle press or a default-width
-pick, `setPhotoArrangement()` on a Layout pick, `resetPhotoCell()` on the
+toggle: `makePhotoCellManual()` runs on any handle press, `setPhotoArrangement()` on a Layout pick, `resetPhotoCell()` on the
 Reset button. Photos are always left-aligned (there is no alignment setting).
 
 | Function | Description |
@@ -374,7 +373,7 @@ photos). Mouse: drag after `PHOTO_MOUSE_SLOP` px. Touch/pen: long-press
 | `arrangementDiagram(rows) → Element` | Small SVG of an arrangement's rows (`.layout-diagram`) for the Layout picker. |
 | `arrangementLabel(arrangement) → string` | Accessible name of an arrangement: one preset label per row, e.g. `'Half, Full'`. |
 | `resetPhotoCellIn(target)` | Reset button: `resetPhotoCell()` as one undo step, then re-render the cell. |
-| `showPhotoCellMenu(anchor, target)` | Cell ⋯ popover: Layout (`.layout-picker`, one button per `autoArrangements()` entry, shown for 2+ arrangements; pressed = the current one of an automatic cell; picking calls `setPhotoArrangement()`), default width (Full / Half / Third, from `PHOTO_SIZE_PRESETS`; makes the cell manual; pressed only when manual); each change is one undo step. |
+| `showPhotoCellMenu(anchor, target)` | Cell ⋯ popover (the ⋯ button shows only for 2+ arrangements): Layout (`.layout-picker`, one button per `autoArrangements()` entry; pressed = the current one of an automatic cell; picking calls `setPhotoArrangement()`, one undo step). |
 
 ### app — photos: in-cell crop and rotate
 
@@ -567,9 +566,9 @@ Observation: `id` (UUID), `number` (string), `description`, `requirement`,
 `completedDate` (ISO\|null), `tagIds[]`, `createdInReport` (number).
 
 Cell `display` (observation and general observation; `{}` = defaults, see
-`cellDisplay()`): `photoWidth` (10–100 %, the menu offers the
-`PHOTO_SIZE_PRESETS` Full/Half/Third; other values are kept as overrides;
-default 100; used by manual cells), `photoMode` (absent =
+`cellDisplay()`): `photoWidth` (10–100 %; the size of a
+manual cell's photos that have no override; default 100, no longer set by the
+UI; cleared by Reset), `photoMode` (absent =
 automatic, `'manual'`), `photoArrangement` (automatic cells: the chosen
 `autoArrangements()` key, e.g. `'3'`; absent = the default).
 

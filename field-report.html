@@ -2667,7 +2667,7 @@ function photoCell(target, ids, { readOnly = false, compact = false } = {}) {
           title: 'Size photos automatically again',
         }, 'Reset'),
         h('button', { type: 'button', class: 'photo-add', dataset: { pick: target } }, '+ Add photo'),
-        h('button', {
+        autoArrangements(layout.photos.length).length > 1 && h('button', {
           type: 'button', class: 'icon-btn photo-cell-menu hover-control', title: 'Photo layout',
           'aria-label': 'Photo layout', dataset: { cellMenu: target },
         }, icon('more')))
@@ -3132,12 +3132,11 @@ function resetPhotoCellIn(target) {
   refreshPhotoCell(target);
 }
 
-// Cell ⋯ menu: layout (automatic arrangement) and default width.
+// Cell ⋯ menu: the Layout picker (automatic arrangements).
 function showPhotoCellMenu(anchor, target) {
   const r = state.report;
   const kind = target.split(':')[0];
   const display = photoCellDisplay(target);
-  const cell = cellDisplay(display);
   const ids = photoList(target);
   const layout = photoLayout(r, kind, display, ids);
   const arrangements = autoArrangements(layout.photos.length);
@@ -3149,25 +3148,14 @@ function showPhotoCellMenu(anchor, target) {
     const next = $(`.photo-cell[data-target="${target}"] [data-cell-menu]`);
     if (next) showPhotoCellMenu(next, target); else closePopover();
   };
-  const choice = (label, options, current, onPick) => [
-    h('div', { class: 'field-label' }, label),
-    h('div', { class: 'segmented', role: 'group', 'aria-label': label }, options.map(([value, text]) => h('button', {
-      type: 'button', 'aria-pressed': String(value === current),
-      onclick: () => { if (value !== current) apply(() => onPick(value)); },
-    }, text))),
-  ];
-  // Picking a layout keeps (or makes) the cell automatic; a default width makes it manual.
+  // Picking a layout keeps (or makes) the cell automatic.
   showPopover(anchor, h('div', { class: 'photo-menu' },
-    arrangements.length > 1 && [
-      h('div', { class: 'field-label' }, 'Layout'),
-      h('div', { class: 'segmented layout-picker', role: 'group', 'aria-label': 'Layout' }, arrangements.map((a) => h('button', {
-        type: 'button', 'aria-pressed': String(a.key === layout.arrangement), dataset: { arrangement: a.key },
-        'aria-label': arrangementLabel(a), title: arrangementLabel(a),
-        onclick: () => { if (a.key !== layout.arrangement) apply(() => setPhotoArrangement(r, display, ids, a.key)); },
-      }, arrangementDiagram(a.rows)))),
-    ],
-    choice('Default photo width', PHOTO_SIZE_PRESETS.map((p) => [p.width, p.label]), cell.photoMode === 'manual' ? cell.photoWidth : null,
-      (w) => { display.photoWidth = w; display.photoMode = 'manual'; delete display.photoArrangement; })));
+    h('div', { class: 'field-label' }, 'Layout'),
+    h('div', { class: 'segmented layout-picker', role: 'group', 'aria-label': 'Layout' }, arrangements.map((a) => h('button', {
+      type: 'button', 'aria-pressed': String(a.key === layout.arrangement), dataset: { arrangement: a.key },
+      'aria-label': arrangementLabel(a), title: arrangementLabel(a),
+      onclick: () => { if (a.key !== layout.arrangement) apply(() => setPhotoArrangement(r, display, ids, a.key)); },
+    }, arrangementDiagram(a.rows))))));
 }
 
 /* ==== SECTION: app — photos: in-cell crop and rotate ==== */
