@@ -349,7 +349,6 @@ function snapPhotoWidth(pct) {
 function cellDisplay(display) {
   const d = display || {};
   return {
-    photoWidth: validPhotoWidth(d.photoWidth) || 100,
     photoMode: d.photoMode === 'manual' ? 'manual' : 'auto',
     photoArrangement: typeof d.photoArrangement === 'string' ? d.photoArrangement : null,
   };
@@ -378,8 +377,9 @@ function cellArrangement(cell, count) {
   return options.find((a) => a.key === cell.photoArrangement) || options[0] || null;
 }
 
-function effectivePhotoWidth(photo, cell) {
-  return validPhotoWidth(photo && photo.display && photo.display.width) || cell.photoWidth;
+// A manual cell's photo: its width override, else Full.
+function effectivePhotoWidth(photo) {
+  return validPhotoWidth(photo && photo.display && photo.display.width) || 100;
 }
 
 function photoMaxHeightIn(config, kind) {
@@ -414,7 +414,7 @@ function photoLayout(report, kind, display, ids) {
   return {
     ...photoScale(report, kind),
     arrangement: auto ? auto.key : null,
-    photos: present.map((id, i) => ({ id, width: auto ? auto.widths[i] : effectivePhotoWidth(report.photos[id], cell) })),
+    photos: present.map((id, i) => ({ id, width: auto ? auto.widths[i] : effectivePhotoWidth(report.photos[id]) })),
   };
 }
 
@@ -440,7 +440,6 @@ function makePhotoCellManual(report, kind, display, ids) {
 function resetPhotoCell(report, display, ids) {
   delete display.photoMode;
   delete display.photoArrangement;
-  delete display.photoWidth;
   clearPhotoWidths(report, ids);
 }
 

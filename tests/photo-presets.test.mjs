@@ -1,17 +1,16 @@
 // Issue #41: two halves and three thirds fill one row exactly, on screen at
-// phone, tablet and desktop widths and in print, whether the size comes from
-// the cell default or from each photo. The cell menu offers Full, Half, Third.
+// phone, tablet and desktop widths and in print.
 // Needs a Chrome, Chromium or Edge binary: set CHROME_PATH, or have one on PATH.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluate, waitUntilTrue, unlock, withPage } from './browser.mjs';
 
 const THIRD = 100 / 3;
-// Each cell: { cell: cell default width, photos: per-photo widths (null = default) }.
+// Per-photo widths of each (manual) cell.
 const CELLS = [
-  { cell: 50, photos: [null, null, null, null] },
-  { cell: THIRD, photos: [null, null, null, null, null, null] },
-  { cell: 100, photos: [50, 50, THIRD, THIRD, THIRD] },
+  [50, 50, 50, 50],
+  [THIRD, THIRD, THIRD, THIRD, THIRD, THIRD],
+  [50, 50, THIRD, THIRD, THIRD],
 ];
 // Expected row index of each photo, per cell.
 const ROWS = [[0, 0, 1, 1], [0, 0, 0, 1, 1, 1], [0, 0, 1, 1, 1]];
@@ -25,13 +24,13 @@ const setup = `(async () => {
   const wide = c.toDataURL('image/jpeg', 0.9);
   // Tall caps never bind for these wide photos.
   state.report.config.photoMaxHeightTable = 6;
-  for (const { cell, photos } of ${JSON.stringify(CELLS)}) {
+  for (const photos of ${JSON.stringify(CELLS)}) {
     addObservation();
     const o = state.report.observations.at(-1);
-    o.display = { photoWidth: cell, photoMode: 'manual' };
+    o.display = { photoMode: 'manual' };
     for (const width of photos) {
       const photo = createPhoto(wide, 'p.jpg');
-      if (width != null) photo.display = { ...photo.display, width };
+      photo.display = { ...photo.display, width };
       state.report.photos[photo.id] = photo;
       o.photoIds.push(photo.id);
     }

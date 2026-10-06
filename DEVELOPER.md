@@ -15,47 +15,47 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 | core — numbering | 223–245 |
 | core — inheritance | 246–295 |
 | core — tags and filters | 296–324 |
-| core — photo display | 325–517 |
-| core — undo history | 518–577 |
-| core — file formats | 578–705 |
-| core — messages and debug log | 706–855 |
-| css — tokens and base | 856–907 |
-| css — toolbar and page | 908–943 |
-| css — header form | 944–979 |
-| css — general observations | 980–991 |
-| css — observation table | 992–1057 |
-| css — photos | 1058–1138 |
-| css — reminders | 1139–1146 |
-| css — popovers, dialogs, panel | 1147–1224 |
-| css — photo editor | 1225–1257 |
-| css — password gate | 1258–1270 |
-| css — responsive | 1271–1308 |
-| css — print | 1309–1370 |
-| markup — shell | 1371–1420 |
-| app — dom helpers and icons | 1421–1573 |
-| app — state and events | 1574–1668 |
-| app — dialogs and popovers | 1669–1747 |
-| app — floating toolbar | 1748–1795 |
-| app — notify: messages and debug log | 1796–1868 |
-| app — render: toolbar and header | 1869–2118 |
-| app — render: general observations | 2119–2174 |
-| app — render: observations table | 2175–2384 |
-| app — render: filters and reminders | 2385–2476 |
-| app — sorting and column resize | 2477–2566 |
-| app — photos: import, cells, drag and drop | 2567–2792 |
-| app — photos: pointer drag | 2793–2959 |
-| app — photos: selection, resize and cell menu | 2960–3160 |
-| app — photos: in-cell crop and rotate | 3161–3287 |
-| app — photos: flatten and markup drawing | 3288–3500 |
-| app — photo editor | 3501–4033 |
-| app — persistence: files | 4034–4184 |
-| app — persistence: autosave (IndexedDB) | 4185–4273 |
-| app — export: CSV | 4274–4281 |
-| app — export: PDF (print) | 4282–4482 |
-| app — config panel | 4483–4672 |
-| app — office defaults (developer stub) | 4673–4687 |
-| app — password gate | 4688–4713 |
-| app — keyboard, window events and init | 4714–4816 |
+| core — photo display | 325–516 |
+| core — undo history | 517–576 |
+| core — file formats | 577–704 |
+| core — messages and debug log | 705–854 |
+| css — tokens and base | 855–906 |
+| css — toolbar and page | 907–942 |
+| css — header form | 943–978 |
+| css — general observations | 979–990 |
+| css — observation table | 991–1056 |
+| css — photos | 1057–1137 |
+| css — reminders | 1138–1145 |
+| css — popovers, dialogs, panel | 1146–1223 |
+| css — photo editor | 1224–1256 |
+| css — password gate | 1257–1269 |
+| css — responsive | 1270–1307 |
+| css — print | 1308–1369 |
+| markup — shell | 1370–1419 |
+| app — dom helpers and icons | 1420–1572 |
+| app — state and events | 1573–1667 |
+| app — dialogs and popovers | 1668–1746 |
+| app — floating toolbar | 1747–1794 |
+| app — notify: messages and debug log | 1795–1867 |
+| app — render: toolbar and header | 1868–2117 |
+| app — render: general observations | 2118–2173 |
+| app — render: observations table | 2174–2383 |
+| app — render: filters and reminders | 2384–2475 |
+| app — sorting and column resize | 2476–2565 |
+| app — photos: import, cells, drag and drop | 2566–2791 |
+| app — photos: pointer drag | 2792–2958 |
+| app — photos: selection, resize and cell menu | 2959–3159 |
+| app — photos: in-cell crop and rotate | 3160–3286 |
+| app — photos: flatten and markup drawing | 3287–3499 |
+| app — photo editor | 3500–4032 |
+| app — persistence: files | 4033–4183 |
+| app — persistence: autosave (IndexedDB) | 4184–4272 |
+| app — export: CSV | 4273–4280 |
+| app — export: PDF (print) | 4281–4481 |
+| app — config panel | 4482–4671 |
+| app — office defaults (developer stub) | 4672–4686 |
+| app — password gate | 4687–4712 |
+| app — keyboard, window events and init | 4713–4815 |
 
 ## 2. Modules
 
@@ -128,7 +128,7 @@ Automatic and manual cells: a cell is automatic (`display.photoMode` unset)
 until the user sizes a photo, then manual (`'manual'`). An automatic cell
 takes every width from an arrangement (`autoArrangements()`, the chosen
 `display.photoArrangement` or the default) and ignores photo overrides; a
-manual cell uses each photo's override, else the cell default. There is no
+manual cell uses each photo's override, else Full. There is no
 toggle: `makePhotoCellManual()` runs on any handle press, `setPhotoArrangement()` on a Layout pick, `resetPhotoCell()` on the
 Reset button. Photos are always left-aligned (there is no alignment setting).
 
@@ -137,17 +137,17 @@ Reset button. Photos are always left-aligned (there is no alignment setting).
 | `validPhotoWidth(value) → number\|null` | A number in 10–100, else null. A `PHOTO_WIDTH_STEPS` value is kept exact (a third is `100 / 3`); any other width is a freeform override, rounded to a whole %. |
 | `snapPhotoWidth(pct) → number` | Clamp to 10–100; snap to `PHOTO_WIDTH_STEPS` within `PHOTO_WIDTH_SNAP` (4) %, else round. |
 | `photoWidthLabel(pct) → string` | Width as a whole %, e.g. `'33%'` for a third. |
-| `cellDisplay(display) → { photoWidth, photoMode, photoArrangement }` | Cell defaults: 100 %, `auto`, no arrangement chosen (`null`). |
+| `cellDisplay(display) → { photoMode, photoArrangement }` | Cell defaults: `auto`, no arrangement chosen (`null`). |
 | `autoArrangements(count) → [{ key, rows, widths }]` | Plausible layouts for `count` photos: rows of 2 (lone last photo Full; the default, first), rows of 1, rows of 3 (remainder Full or 2 Halves); duplicates dropped. `rows`: photos per row; `key`: `rows.join('-')`; `widths`: per photo, from `PHOTO_SIZE_PRESETS`. |
 | `cellArrangement(cell, count) → arrangement\|null` | An automatic cell's arrangement: `cell.photoArrangement` if it is one of `autoArrangements(count)`, else the default; null for a manual cell or no photos. |
-| `effectivePhotoWidth(photo, cell) → number` | `photo.display.width` if valid, else the cell's `photoWidth`. |
+| `effectivePhotoWidth(photo) → number` | A manual cell's photo width: `photo.display.width` if valid, else 100 (Full). |
 | `photoMaxHeightIn(config, kind) → number` | `photoMaxHeightTable` / `photoMaxHeightGeneral`, clamped to 1–6 in. |
 | `printPhotoCellWidthIn(report, kind) → number` | Photo cell content width in the PDF (inches; mirrors css — print). |
 | `photoScale(report, kind) → { maxHeightIn, gapIn, capRatio, gapRatio }` | PDF height cap and photo gap (inches), and each as a multiple of `printPhotoCellWidthIn()`, so the editor can draw the PDF's layout at any cell width. |
 | `photoLayout(report, kind, display, ids) → { ...photoScale(), arrangement, photos: [{ id, width }] }` | Layout of one photo cell, shared by screen and print: the editor is a scaled copy of the PDF. Widths come from `cellArrangement()` (its `key` is `arrangement`) or, in a manual cell (`arrangement: null`), `effectivePhotoWidth()`. |
 | `setPhotoArrangement(report, display, ids, key)` | Make the cell automatic with arrangement `key` and clear its photos' width overrides. |
 | `makePhotoCellManual(report, kind, display, ids)` | Make an automatic cell manual, writing each photo's current width as its override, so nothing moves; no-op on a manual cell. |
-| `resetPhotoCell(report, display, ids)` | Make a cell automatic with the default arrangement: delete `photoMode`, `photoArrangement` and `photoWidth` from `display`, and every photo's width override. |
+| `resetPhotoCell(report, display, ids)` | Make a cell automatic with the default arrangement: delete `photoMode` and `photoArrangement` from `display`, and every photo's width override. |
 | `photoCountChanged(report, display, ids)` | After photos are added to or removed from a cell: an automatic cell drops its chosen arrangement (back to the default) and the overrides of photos moved in; a manual cell is unchanged. |
 | `clearPhotoWidths(report, ids)` | Delete `display.width` from each photo. |
 | `movePhoto(src, dest, photoId, beforeId) → boolean` | Move an id between (or within) photo lists; false when nothing changed. |
@@ -566,9 +566,7 @@ Observation: `id` (UUID), `number` (string), `description`, `requirement`,
 `completedDate` (ISO\|null), `tagIds[]`, `createdInReport` (number).
 
 Cell `display` (observation and general observation; `{}` = defaults, see
-`cellDisplay()`): `photoWidth` (10–100 %; the size of a
-manual cell's photos that have no override; default 100, no longer set by the
-UI; cleared by Reset), `photoMode` (absent =
+`cellDisplay()`): `photoMode` (absent =
 automatic, `'manual'`), `photoArrangement` (automatic cells: the chosen
 `autoArrangements()` key, e.g. `'3'`; absent = the default).
 
@@ -649,18 +647,18 @@ Dispatched on `document` by `emit()`; `detail` is the payload.
 
 | Section | Key classes |
 | --- | --- |
-| css — tokens and base | 778–829 |
-| css — toolbar and page | 830–865 |
-| css — header form | 866–901 |
-| css — general observations | 902–913 |
-| css — observation table | 914–979 |
-| css — photos | 980–1058 |
-| css — reminders | 1059–1066 |
-| css — popovers, dialogs, panel | 1067–1144 |
-| css — photo editor | 1145–1177 |
-| css — password gate | 1178–1190 |
-| css — responsive | 1191–1228 |
-| css — print | 1229–1290 |
+| css — tokens and base | 855–906 |
+| css — toolbar and page | 907–942 |
+| css — header form | 943–978 |
+| css — general observations | 979–990 |
+| css — observation table | 991–1056 |
+| css — photos | 1057–1137 |
+| css — reminders | 1138–1145 |
+| css — popovers, dialogs, panel | 1146–1223 |
+| css — photo editor | 1224–1256 |
+| css — password gate | 1257–1269 |
+| css — responsive | 1270–1307 |
+| css — print | 1308–1369 |
 
 `@page` rules are generated at runtime into `<style id="print-page-style">`
 by `updatePageStyle()`: Letter, margins 1.55in 1in 0.8in 1in; `@top-left`
