@@ -65,8 +65,8 @@ test('a new cell is automatic and lays its photos out in the default arrangement
   assert.equal(Core.photoLayout(r, 'obs', o.display, o.photoIds).arrangement, '2-1');
 });
 
-test('an automatic cell ignores width overrides and the cell default width', () => {
-  const { r, o } = reportWith(2, { photoWidth: T });
+test('an automatic cell ignores width overrides', () => {
+  const { r, o } = reportWith(2);
   r.photos[o.photoIds[0]].display.width = 70;
   deepEq(widths(r, o), [H, H]);
 });
@@ -126,7 +126,7 @@ test('a manual cell never changes existing sizes when photos are added or remove
   r.photos[o.photoIds[0]].display.width = 70;
   addPhoto(r, o);
   Core.photoCountChanged(r, o.display, o.photoIds);
-  deepEq(widths(r, o), [70, H, F, F], 'the new photo gets the cell default (a preset)');
+  deepEq(widths(r, o), [70, H, F, F], 'the new photo is Full');
   o.photoIds.splice(1, 1);
   Core.photoCountChanged(r, o.display, o.photoIds);
   deepEq(widths(r, o), [70, F, F]);
@@ -184,7 +184,6 @@ test('choosing an arrangement is one undo step', () => {
 test('resetting a manual cell clears every size override and re-applies the default arrangement', () => {
   const { r, o } = reportWith(3);
   Core.makePhotoCellManual(r, 'obs', o.display, o.photoIds);
-  o.display.photoWidth = 100 / 3;
   r.photos[o.photoIds[0]].display.width = 70;
   Core.resetPhotoCell(r, o.display, o.photoIds);
   deepEq(o.display, {});

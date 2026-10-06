@@ -368,8 +368,6 @@ test('a third keeps its exact value; other widths are freeform overrides kept as
   assert.equal(v(75), 75);
   assert.equal(v(33.4), 33);
   assert.equal(v(5), null);
-  deepEq(Core.cellDisplay({ photoWidth: 100 / 3 }, 'obs').photoWidth, 100 / 3);
-  deepEq(Core.cellDisplay({ photoWidth: 75 }, 'obs').photoWidth, 75);
 });
 
 test('photo width labels round to a whole %', () => {
@@ -377,24 +375,23 @@ test('photo width labels round to a whole %', () => {
   assert.equal(Core.photoWidthLabel(50), '50%');
 });
 
-test('cell display defaults: automatic, 100 % wide; there is no alignment', () => {
+test('cell display defaults: automatic; there is no alignment or cell default width', () => {
   const auto = { photoMode: 'auto', photoArrangement: null };
-  deepEq(Core.cellDisplay({}, 'obs'), { photoWidth: 100, ...auto });
-  deepEq(Core.cellDisplay(undefined, 'gen'), { photoWidth: 100, ...auto });
+  deepEq(Core.cellDisplay({}, 'obs'), auto);
+  deepEq(Core.cellDisplay(undefined, 'gen'), auto);
   deepEq(Core.cellDisplay({ photoWidth: 50, photoAlign: 'center', photoMode: 'manual' }, 'obs'),
-    { photoWidth: 50, photoMode: 'manual', photoArrangement: null });
-  deepEq(Core.cellDisplay({ photoWidth: 'fit', photoMode: 'x', photoArrangement: '2-1' }, 'obs'),
-    { photoWidth: 100, photoMode: 'auto', photoArrangement: '2-1' });
+    { photoMode: 'manual', photoArrangement: null });
+  deepEq(Core.cellDisplay({ photoMode: 'x', photoArrangement: '2-1' }, 'obs'),
+    { photoMode: 'auto', photoArrangement: '2-1' });
 });
 
-test('a photo width override wins over the cell default', () => {
-  const cell = Core.cellDisplay({ photoWidth: 50 }, 'obs');
+test('a photo is its width override, else Full', () => {
   const photo = Core.createPhoto('data:image/jpeg;base64,AAA', 'a.jpg');
-  assert.equal(Core.effectivePhotoWidth(photo, cell), 50);
+  assert.equal(Core.effectivePhotoWidth(photo), 100);
   photo.display.width = 30;
-  assert.equal(Core.effectivePhotoWidth(photo, cell), 30);
+  assert.equal(Core.effectivePhotoWidth(photo), 30);
   photo.display.width = 'bad';
-  assert.equal(Core.effectivePhotoWidth(photo, cell), 50);
+  assert.equal(Core.effectivePhotoWidth(photo), 100);
 });
 
 test('print height caps default to 2 in (table) and 4 in (general), clamped to 1–6 in', () => {
@@ -434,7 +431,7 @@ test('a manual photo layout lists existing photos with effective widths and cap'
   deepEq(layout, {
     ...Core.photoScale(r, 'obs'),
     arrangement: null,
-    photos: [{ id: a.id, width: 50 }, { id: b.id, width: 75 }],
+    photos: [{ id: a.id, width: 100 }, { id: b.id, width: 75 }],
   });
 });
 
@@ -497,12 +494,12 @@ test('display options round-trip, and older reports get empty display objects', 
   const p = Core.createPhoto('data:image/jpeg;base64,AAA', 'a.jpg');
   p.display.width = 40;
   r.photos[p.id] = p;
-  addObservation(r, { photoIds: [p.id], display: { photoWidth: 50, photoMode: 'manual' } });
-  r.generalObservations.push({ ...Core.createGeneralObservation(), display: { photoWidth: 75 } });
+  addObservation(r, { photoIds: [p.id], display: { photoMode: 'manual' } });
+  r.generalObservations.push({ ...Core.createGeneralObservation(), display: { photoArrangement: '3' } });
   r.config.photoMaxHeightTable = 3.5;
   const back = Core.parseReport(Core.serializeReport(r));
-  deepEq(back.observations[0].display, { photoWidth: 50, photoMode: 'manual' });
-  deepEq(back.generalObservations[0].display, { photoWidth: 75 });
+  deepEq(back.observations[0].display, { photoMode: 'manual' });
+  deepEq(back.generalObservations[0].display, { photoArrangement: '3' });
   deepEq(back.photos[p.id].display, { width: 40 });
   assert.equal(back.config.photoMaxHeightTable, 3.5);
 
@@ -528,7 +525,7 @@ test('undo restores photo width overrides and cell display options', () => {
   history.record(Core.snapshotReport(r));
   p.display.width = 50;
   history.record(Core.snapshotReport(r));
-  o.display.photoWidth = 25;
+  o.display.photoMode = 'manual';
 
   Core.restoreSnapshot(r, history.undo(Core.snapshotReport(r)));
   deepEq(r.observations[0].display, {});
