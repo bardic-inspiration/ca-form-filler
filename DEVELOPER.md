@@ -9,53 +9,55 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 
 | Section | Lines |
 | --- | --- |
-| core — config defaults | 14–84 |
-| core — utilities | 85–151 |
-| core — report model | 152–222 |
-| core — numbering | 223–245 |
-| core — inheritance | 246–295 |
-| core — tags and filters | 296–324 |
-| core — photo display | 325–516 |
-| core — undo history | 517–576 |
-| core — file formats | 577–704 |
-| core — messages and debug log | 705–854 |
-| css — tokens and base | 855–906 |
-| css — toolbar and page | 907–942 |
-| css — header form | 943–978 |
-| css — general observations | 979–990 |
-| css — observation table | 991–1056 |
-| css — photos | 1057–1137 |
-| css — reminders | 1138–1145 |
-| css — popovers, dialogs, panel | 1146–1223 |
-| css — photo editor | 1224–1256 |
-| css — password gate | 1257–1269 |
-| css — responsive | 1270–1307 |
-| css — print | 1308–1369 |
-| markup — shell | 1370–1419 |
-| app — dom helpers and icons | 1420–1572 |
-| app — state and events | 1573–1667 |
-| app — dialogs and popovers | 1668–1746 |
-| app — floating toolbar | 1747–1794 |
-| app — notify: messages and debug log | 1795–1867 |
-| app — render: toolbar and header | 1868–2117 |
-| app — render: general observations | 2118–2173 |
-| app — render: observations table | 2174–2383 |
-| app — render: filters and reminders | 2384–2475 |
-| app — sorting and column resize | 2476–2565 |
-| app — photos: import, cells, drag and drop | 2566–2791 |
-| app — photos: pointer drag | 2792–2958 |
-| app — photos: selection, resize and cell menu | 2959–3164 |
-| app — photos: in-cell crop and rotate | 3165–3291 |
-| app — photos: flatten and markup drawing | 3292–3504 |
-| app — photo editor | 3505–4037 |
-| app — persistence: files | 4038–4188 |
-| app — persistence: autosave (IndexedDB) | 4189–4277 |
-| app — export: CSV | 4278–4285 |
-| app — export: PDF (print) | 4286–4486 |
-| app — config panel | 4487–4676 |
-| app — office defaults (developer stub) | 4677–4691 |
-| app — password gate | 4692–4717 |
-| app — keyboard, window events and init | 4718–4820 |
+| core — config defaults | 14–85 |
+| core — utilities | 86–152 |
+| core — report model | 153–223 |
+| core — numbering | 224–246 |
+| core — inheritance | 247–296 |
+| core — tags and filters | 297–325 |
+| core — photo display | 326–517 |
+| core — undo history | 518–577 |
+| core — file formats | 578–705 |
+| core — docx export | 706–1172 |
+| core — messages and debug log | 1173–1328 |
+| css — tokens and base | 1329–1380 |
+| css — toolbar and page | 1381–1416 |
+| css — header form | 1417–1452 |
+| css — general observations | 1453–1464 |
+| css — observation table | 1465–1530 |
+| css — photos | 1531–1611 |
+| css — reminders | 1612–1619 |
+| css — popovers, dialogs, panel | 1620–1697 |
+| css — photo editor | 1698–1730 |
+| css — password gate | 1731–1743 |
+| css — responsive | 1744–1781 |
+| css — print | 1782–1843 |
+| markup — shell | 1844–1893 |
+| app — dom helpers and icons | 1894–2047 |
+| app — state and events | 2048–2142 |
+| app — dialogs and popovers | 2143–2221 |
+| app — floating toolbar | 2222–2269 |
+| app — notify: messages and debug log | 2270–2342 |
+| app — render: toolbar and header | 2343–2594 |
+| app — render: general observations | 2595–2650 |
+| app — render: observations table | 2651–2858 |
+| app — render: filters and reminders | 2859–2950 |
+| app — sorting and column resize | 2951–3040 |
+| app — photos: import, cells, drag and drop | 3041–3266 |
+| app — photos: pointer drag | 3267–3433 |
+| app — photos: selection, resize and cell menu | 3434–3639 |
+| app — photos: in-cell crop and rotate | 3640–3766 |
+| app — photos: flatten and markup drawing | 3767–3979 |
+| app — photo editor | 3980–4512 |
+| app — persistence: files | 4513–4663 |
+| app — persistence: autosave (IndexedDB) | 4664–4752 |
+| app — export: CSV | 4753–4760 |
+| app — export: PDF (print) | 4761–4961 |
+| app — export: Word (docx) | 4962–4996 |
+| app — config panel | 4997–5186 |
+| app — office defaults (developer stub) | 5187–5201 |
+| app — password gate | 5202–5227 |
+| app — keyboard, window events and init | 5228–5330 |
 
 ## 2. Modules
 
@@ -181,6 +183,38 @@ Reset button. Photos are always left-aligned (there is no alignment setting).
 | `toCSV(report) → string` | BOM + CRLF CSV, current items then inherited. |
 | `officeDefaultsJSON(report) → string` | Office-defaults JSON (config + tags). |
 | `applyOfficeDefaults(report, json) → report` | Replace config + tags from office-defaults JSON. |
+
+### core — docx export
+
+`toDocx()` writes the report as a Word document laid out like the PDF (css —
+print, `updatePageStyle()`): Letter, the PDF's margins; the masthead in the
+first page header, the running header (`PAGE` / `NUMPAGES` fields) on later
+pages and the office footer on the first; the header fields, disclaimer,
+boxed and numbered general observations, the observations table (header row
+repeats, rows don't split) and reminders, with the PDF's sizes, borders and
+spacing. Photos use `photoLayout()` and `printPhotoCellWidthIn()`, so they
+size and wrap like the PDF; a row of photos with mixed heights is a
+borderless table so they top-align. Fonts are Franklin Gothic Book / Demi
+(`DOCX_FONT`, `DOCX_FONT_DEMI`), with Arial as the fallback in
+`word/fontTable.xml`. Option units: pt; XML: twips; images: EMU.
+
+| Function | Description |
+| --- | --- |
+| `crc32(bytes) → number` | CRC-32 of a byte array (zip checksums). |
+| `zipStore(files) → Uint8Array` | Zip of `[{ name, data: string \| Uint8Array }]`, stored (no compression), UTF-8 names. |
+| `dataUrlBytes(url) → { type, bytes }` | Decode a base64 or percent-encoded data URL. |
+| `imageSize(bytes) → { width, height }\|null` | Pixel size from a PNG or JPEG header. |
+| `xmlText(value) → string` | Escape for XML; drops characters XML forbids. |
+| `twips(pt) → number` | Points to whole twips. |
+| `docxRPr({ demi, size, color, spacing, fill }) → string` | Run properties in schema order. |
+| `docxRun(text, rPr) → string` | A text run; new lines become breaks, tabs tabs. |
+| `docxPara(opts, runs) → string` | A paragraph (`keepNext`, `numId`, `borderBottom`, `before`, `after`, exact `line`, `ind`, `right`, `hanging`, `jc`, `mark`). |
+| `docxTable({ widths, ind, border, borders, mar }, rows) → string` | A fixed-layout table; `rows`: `[{ header, cantSplit, cells: [{ body, span, mar }] }]`. |
+| `docxImage(pkg, part, image, widthIn, heightIn) → string` | Inline picture run; adds the bytes to the package media and a relationship to `part`. |
+| `docxPhotoFlow(pkg, part, report, kind, display, ids, photos, opts) → string` | A photo cell's rows as the PDF wraps them. |
+| `docxPill(text, kind, bg, before) → string` | One pill paragraph (`DOCX_PILL_COLORS`: `plain`, `complete`, `open`). |
+| `docxPills(report, item, { status }) → string` | Status and tag pills per `pdfShowStatus` / `pdfShowTags`, as `printItemPills()`. |
+| `toDocx(report, { logo, photos }) → Uint8Array` | The .docx; `logo` and `photos` (`{ [id]: url }`) are PNG or JPEG data URLs. |
 
 ### core — messages and debug log
 
@@ -498,6 +532,13 @@ pointerdown outside the photo applies; ✕, Escape, undo or redo discards.
 | `exportPDF()` | Tip, prepare, set `document.title`, `window.print()`; explains if no print window opened. |
 | `bindPrintEvents()` | `beforeprint` sets `printOpened` and builds when needed, `afterprint` reset. |
 
+### app — export: Word (docx)
+
+| Function | Description |
+| --- | --- |
+| `docxLogo(url) → Promise<string>` | The logo as PNG or JPEG; other formats are redrawn as PNG. |
+| `exportDOCX()` | Flatten the PDF's photos (`photoExportMaxSide`, `photoExportQuality`), `toDocx()`, download `<file name>.docx`. |
+
 ### app — config panel
 
 | Function | Description |
@@ -588,27 +629,28 @@ App-only `state`: `fileHandle`, `fileName`, `dirty`, `changeCount`,
 | `numberingPattern` | string | `{report}.{item:02}` | `renumber()` |
 | `numberingStart` | number | `1` | `renumber()` |
 | `carryForward` | boolean | `true` | `nextReportFrom()`, `remindersVisible()`, `newReportAction()` |
-| `pdfUseScreenWidths` | boolean | `true` | `printColumnWidths()` |
-| `pdfShowStatus` | boolean | `false` | `printItemPills()` |
-| `pdfShowTags` | boolean | `false` | `printItemPills()` |
-| `pdfShowReminders` | boolean | `true` | `renderPrint()` |
-| `photoExportMaxSide` | number (400–1200) | `600` | `preparePrint()`, `bindPrintEvents()` |
-| `photoExportQuality` | number | `0.8` | `preparePrint()` |
-| `photoMaxHeightTable` | number (1–6 in) | `2` | `photoMaxHeightIn()` → `photoCell()`, `printPhotoFlow()` |
-| `photoMaxHeightGeneral` | number (1–6 in) | `4` | `photoMaxHeightIn()` → `photoCell()`, `printPhotoFlow()` |
+| `pdfUseScreenWidths` | boolean | `true` | `printColumnWidths()` (PDF and Word) |
+| `pdfShowStatus` | boolean | `false` | `printItemPills()`, `docxPills()` |
+| `pdfShowTags` | boolean | `false` | `printItemPills()`, `docxPills()` |
+| `pdfShowReminders` | boolean | `true` | `renderPrint()`, `toDocx()` |
+| `photoExportMaxSide` | number (400–1200) | `600` | `preparePrint()`, `bindPrintEvents()`, `exportDOCX()` |
+| `photoExportQuality` | number | `0.8` | `preparePrint()`, `exportDOCX()` |
+| `photoMaxHeightTable` | number (1–6 in) | `2` | `photoMaxHeightIn()` → `photoCell()`, `printPhotoFlow()`, `docxPhotoFlow()` |
+| `photoMaxHeightGeneral` | number (1–6 in) | `4` | `photoMaxHeightIn()` → `photoCell()`, `printPhotoFlow()`, `docxPhotoFlow()` |
 | `markupColor` | hex | `#F26A21` | `openPhotoEditor()` |
 | `photoMoveControls` | boolean | `false` | `photoToolbarActions()`, `bindPhotoResize()` |
 | `disclaimer` | string | template text | `createReport()`, `renderDisclaimer()` |
-| `logo` | data URL \| null | `null` (= `DEFAULT_LOGO`) | `renderPrint()`, `logoEditor()` |
+| `logo` | data URL \| null | `null` (= `DEFAULT_LOGO`) | `renderPrint()`, `logoEditor()`, `exportDOCX()` |
 | `autosaveSeconds` | number (≥ 5) | `30` | `restartAutosaveTimer()` |
-| `mastheadTagline` | string | `LANDSCAPE ARCHITECTURE   URBAN DESIGN   PLANNING` | `renderPrint()` |
-| `footerText` | string | office address line | `updatePageStyle()` |
+| `mastheadTagline` | string | `LANDSCAPE ARCHITECTURE   URBAN DESIGN   PLANNING` | `renderPrint()`, `toDocx()` |
+| `footerText` | string | office address line | `updatePageStyle()`, `toDocx()` |
 
 Other constants: `APP_ID`, `DEFAULTS_APP_ID`, `SCHEMA_VERSION`,
 `DEFAULT_COLUMN_WIDTHS`, `PDF_COLUMN_WIDTHS` (`[8, 38, 33, 21]`),
 `PHOTO_UPLOAD_MAX_SIDE`, `PHOTO_UPLOAD_QUALITY`,
 `PHOTO_WIDTH_MIN`, `PHOTO_WIDTH_SNAP`, `PHOTO_MAX_HEIGHT_RANGE`,
-`PRINT_CONTENT_WIDTH_IN`, `HISTORY_LIMIT`,
+`PRINT_CONTENT_WIDTH_IN`, `HISTORY_LIMIT`, `COLUMN_LABELS`,
+`DOCX_MIME`, `DOCX_FONT`, `DOCX_FONT_DEMI`, `DOCX_PILL_COLORS`,
 `TAG_COLORS`, `NUMBERING_PRESETS`, `CSV_COLUMNS`, `SNAPSHOT_KEYS`,
 `MESSAGES`, `LOG_CODES`, `DEBUG_LOG_LIMIT`, `DEBUG_DETAIL_MAX`,
 `OPEN_IN_BROWSER_HELP`, `SEND_DEBUG_HELP`.
@@ -640,6 +682,7 @@ Dispatched on `document` by `emit()`; `detail` is the payload.
 | Kind | Entry points |
 | --- | --- |
 | Screen | `renderAll()` → `renderHeader()`, `renderGeneral()`, `renderObservations()`, `renderReminders()`; partial: `refreshItem()`, `refreshPhotoCell()`, `renderFilterBarInPlace()`, `updateChrome()` |
+| Word | `exportDOCX()` → `flattenPhoto()`, `docxLogo()` → `toDocx()` |
 | Print | `exportPDF()` → `preparePrint()` → `renderPrint()` → `updatePageStyle()`; menu print: `beforeprint` in `bindPrintEvents()` |
 | Photo flatten | `flattenPhoto()` → `renderFlattened()`: draw crop of original, `drawShapes()` in original coordinates, downscale to max side, `toDataURL('image/jpeg', quality)`; screen previews use max side 1000 |
 
@@ -647,18 +690,18 @@ Dispatched on `document` by `emit()`; `detail` is the payload.
 
 | Section | Key classes |
 | --- | --- |
-| css — tokens and base | 855–906 |
-| css — toolbar and page | 907–942 |
-| css — header form | 943–978 |
-| css — general observations | 979–990 |
-| css — observation table | 991–1056 |
-| css — photos | 1057–1137 |
-| css — reminders | 1138–1145 |
-| css — popovers, dialogs, panel | 1146–1223 |
-| css — photo editor | 1224–1256 |
-| css — password gate | 1257–1269 |
-| css — responsive | 1270–1307 |
-| css — print | 1308–1369 |
+| css — tokens and base | 1329–1380 |
+| css — toolbar and page | 1381–1416 |
+| css — header form | 1417–1452 |
+| css — general observations | 1453–1464 |
+| css — observation table | 1465–1530 |
+| css — photos | 1531–1611 |
+| css — reminders | 1612–1619 |
+| css — popovers, dialogs, panel | 1620–1697 |
+| css — photo editor | 1698–1730 |
+| css — password gate | 1731–1743 |
+| css — responsive | 1744–1781 |
+| css — print | 1782–1843 |
 
 `@page` rules are generated at runtime into `<style id="print-page-style">`
 by `updatePageStyle()`: Letter, margins 1.55in 1in 0.8in 1in; `@top-left`
@@ -688,6 +731,7 @@ Colors: `MARKUP_COLORS`. Widths: `STROKE_FACTORS` × longest image side.
 | Format | Structure |
 | --- | --- |
 | Report JSON | §3; file name `YYMMDD_{ProjectNo}_FOR-{NN}.json` |
+| Word (.docx) | Stored zip (`zipStore()`) of WordprocessingML parts: `word/document.xml`, `styles.xml`, `settings.xml`, `numbering.xml`, `fontTable.xml`, `header1.xml` (first page), `header2.xml`, `footer1.xml` (first page), `media/`; `docProps/core.xml` (title, author) |
 | CSV | UTF-8 BOM, CRLF, RFC 4180; columns `CSV_COLUMNS`; current items then inherited |
 | Office defaults JSON (stub) | `{ app: "WM-FieldReport-Defaults", schemaVersion, config, tags }` |
 
@@ -731,6 +775,7 @@ User-facing codes (`MESSAGES`, each `{ title, message, action }`):
 | `STORAGE_UNAVAILABLE` | warn (once per visit) | `writeAutosave()` |
 | `IMAGE_UNREADABLE` | error | `addPhotosTo()`, `openPhotoEditor()`, logo input in `bindGlobalEvents()` |
 | `PDF_PREPARE_FAILED` | error | `exportPDF()` |
+| `DOCX_EXPORT_FAILED` | error | `exportDOCX()` |
 | `DEBUG_INFO_DOWNLOADED` | info | `copyDebugInfo()` |
 | `UNEXPECTED_ERROR` | error | `reportUncaught()` |
 

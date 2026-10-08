@@ -51,6 +51,7 @@ const DEFAULTS_APP_ID = 'WM-FieldReport-Defaults';
 const SCHEMA_VERSION = 1;
 const DEFAULT_COLUMN_WIDTHS = [8, 36, 32, 24];
 const PDF_COLUMN_WIDTHS = [8, 38, 33, 21];
+const COLUMN_LABELS = ['Item', 'Observation', 'Supporting Photo', 'Contract Requirement'];
 const PHOTO_UPLOAD_MAX_SIDE = 1600;
 const PHOTO_UPLOAD_QUALITY = 0.85;
 // Photo sizes as % of the photo cell: full, half and third of a row. The
@@ -702,6 +703,473 @@ function applyOfficeDefaults(report, json) {
   return report;
 }
 
+/* ==== SECTION: core — docx export ==== */
+
+// Word export, laid out like the PDF (css — print, updatePageStyle()). A
+// .docx is a zip of XML parts; zipStore() writes it without compression.
+// Units: pt in the helpers' options, twips (1/20 pt) in the XML, EMU in images.
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const DOCX_FONT = 'Franklin Gothic Book';
+const DOCX_FONT_DEMI = 'Franklin Gothic Demi';
+const DOCX_PAGE_WIDTH_PT = PRINT_CONTENT_WIDTH_IN * 72;
+const DOCX_PILL_COLORS = { plain: ['#EEEEEE', '#000000'], complete: ['#D3F0CD', '#1C6A2A'], open: ['#FFDCBD', '#92430A'] };
+const DOCX_NS = {
+  w: 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+  r: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+  wp: 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
+  a: 'http://schemas.openxmlformats.org/drawingml/2006/main',
+  pic: 'http://schemas.openxmlformats.org/drawingml/2006/picture',
+};
+const DOCX_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/';
+const XML_HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+
+let crcTable = null;
+
+function crc32(bytes) {
+  if (!crcTable) {
+    crcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      crcTable[n] = c >>> 0;
+    }
+  }
+  let crc = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) crc = crcTable[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+// Zip of [{ name, data: string | Uint8Array }]: stored, UTF-8 names, dated 1980-01-01.
+function zipStore(files) {
+  const enc = new TextEncoder();
+  const entries = files.map((f) => {
+    const data = typeof f.data === 'string' ? enc.encode(f.data) : f.data;
+    return { name: enc.encode(f.name), data, crc: crc32(data) };
+  });
+  const out = new Uint8Array(entries.reduce((n, e) => n + 76 + 2 * e.name.length + e.data.length, 22));
+  const view = new DataView(out.buffer);
+  // Fields shared by the local header (at +6) and the central directory entry (at +8).
+  const common = (at, e) => {
+    view.setUint16(at, 0x0800, true); // UTF-8 names
+    view.setUint16(at + 6, 0x21, true); // 1980-01-01
+    view.setUint32(at + 8, e.crc, true);
+    view.setUint32(at + 12, e.data.length, true);
+    view.setUint32(at + 16, e.data.length, true);
+    view.setUint16(at + 20, e.name.length, true);
+  };
+  let p = 0;
+  const offsets = entries.map((e) => {
+    const start = p;
+    view.setUint32(p, 0x04034b50, true);
+    view.setUint16(p + 4, 20, true);
+    common(p + 6, e);
+    out.set(e.name, p + 30);
+    out.set(e.data, p + 30 + e.name.length);
+    p += 30 + e.name.length + e.data.length;
+    return start;
+  });
+  const dir = p;
+  entries.forEach((e, i) => {
+    view.setUint32(p, 0x02014b50, true);
+    view.setUint16(p + 4, 20, true);
+    view.setUint16(p + 6, 20, true);
+    common(p + 8, e);
+    view.setUint32(p + 42, offsets[i], true);
+    out.set(e.name, p + 46);
+    p += 46 + e.name.length;
+  });
+  view.setUint32(p, 0x06054b50, true);
+  view.setUint16(p + 8, entries.length, true);
+  view.setUint16(p + 10, entries.length, true);
+  view.setUint32(p + 12, p - dir, true);
+  view.setUint32(p + 16, dir, true);
+  return out;
+}
+
+// { type, bytes } of a data URL (base64 or percent-encoded).
+function dataUrlBytes(url) {
+  const m = /^data:([^;,]*)((?:;[^;,]*)*?)(;base64)?,(.*)$/s.exec(String(url));
+  if (!m) throw new Error('Not a data URL');
+  if (!m[3]) return { type: m[1], bytes: new TextEncoder().encode(decodeURIComponent(m[4])) };
+  const s = m[4].replace(/[^A-Za-z0-9+/]/g, '');
+  const bytes = new Uint8Array(Math.floor((s.length * 3) / 4));
+  let acc = 0;
+  let bits = 0;
+  let o = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    const v = c >= 97 ? c - 71 : c >= 65 ? c - 65 : c >= 48 ? c + 4 : c === 43 ? 62 : 63;
+    acc = ((acc << 6) | v) & 0xffffff;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      bytes[o++] = (acc >> bits) & 0xff;
+    }
+  }
+  return { type: m[1], bytes: bytes.subarray(0, o) };
+}
+
+// Pixel size of a PNG or JPEG, else null.
+function imageSize(b) {
+  const u16 = (i) => (b[i] << 8) | b[i + 1];
+  const u32 = (i) => ((b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]) >>> 0;
+  let size = null;
+  if (b.length >= 24 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) {
+    size = { width: u32(16), height: u32(20) };
+  } else if (b[0] === 0xff && b[1] === 0xd8) {
+    for (let i = 2; i + 9 < b.length && b[i] === 0xff;) {
+      const marker = b[i + 1];
+      if (marker === 0xff) { i++; continue; }
+      // Start-of-frame markers (not DHT C4, JPG C8, DAC CC) carry the size.
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        size = { width: u16(i + 7), height: u16(i + 5) };
+        break;
+      }
+      i += 2 + u16(i + 2);
+    }
+  }
+  return size && size.width && size.height ? size : null;
+}
+
+// Text for XML content and attributes: escaped, characters XML forbids dropped.
+function xmlText(value) {
+  return String(value == null ? '' : value)
+    .replace(/[^\t\n\r -퟿-�\u{10000}-\u{10FFFF}]/gu, '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function twips(ptValue) {
+  return Math.round(ptValue * 20);
+}
+
+// Run properties: { demi, size (pt), color, spacing (pt), fill }, in schema order.
+function docxRPr({ demi, size, color, spacing, fill } = {}) {
+  const hex = (c) => String(c).replace('#', '').toUpperCase();
+  const font = demi ? `<w:rFonts w:ascii="${DOCX_FONT_DEMI}" w:hAnsi="${DOCX_FONT_DEMI}" w:cs="${DOCX_FONT_DEMI}"/>` : '';
+  return font
+    + (color ? `<w:color w:val="${hex(color)}"/>` : '')
+    + (spacing ? `<w:spacing w:val="${twips(spacing)}"/>` : '')
+    + (size ? `<w:sz w:val="${Math.round(size * 2)}"/><w:szCs w:val="${Math.round(size * 2)}"/>` : '')
+    + (fill ? `<w:shd w:val="clear" w:color="auto" w:fill="${hex(fill)}"/>` : '');
+}
+
+// One run of text; new lines become line breaks and tabs tabs (white-space: pre-wrap).
+function docxRun(text, rPr = '') {
+  const lines = String(text == null ? '' : text).replace(/\r\n?/g, '\n').split('\n');
+  const body = lines.map((line) => line.split('\t')
+    .map((t) => `<w:t xml:space="preserve">${xmlText(t)}</w:t>`).join('<w:tab/>')).join('<w:br/>');
+  return `<w:r>${rPr ? `<w:rPr>${rPr}</w:rPr>` : ''}${body}</w:r>`;
+}
+
+// Paragraph. line: exact line height in pt (else single); before/after/ind/right/hanging in pt;
+// numId: list; borderBottom: { size, space } in pt; mark: paragraph mark rPr.
+function docxPara(opts = {}, runs = '') {
+  const { keepNext, numId, borderBottom, before = 0, after = 0, line, ind, right, hanging, jc, mark } = opts;
+  const pPr = (keepNext ? '<w:keepNext/>' : '')
+    + (numId ? `<w:numPr><w:ilvl w:val="0"/><w:numId w:val="${numId}"/></w:numPr>` : '')
+    + (borderBottom ? `<w:pBdr><w:bottom w:val="single" w:sz="${Math.round(borderBottom.size * 8)}" w:space="${borderBottom.space}" w:color="000000"/></w:pBdr>` : '')
+    + `<w:spacing w:before="${twips(before)}" w:after="${twips(after)}" w:line="${line ? twips(line) : 240}" w:lineRule="${line ? 'exact' : 'auto'}"/>`
+    + (ind || right || hanging ? `<w:ind w:left="${twips(ind || 0)}"${right ? ` w:right="${twips(right)}"` : ''}${hanging ? ` w:hanging="${twips(hanging)}"` : ''}/>` : '')
+    + (jc ? `<w:jc w:val="${jc}"/>` : '')
+    + (mark ? `<w:rPr>${mark}</w:rPr>` : '');
+  return `<w:p><w:pPr>${pPr}</w:pPr>${runs}</w:p>`;
+}
+
+// Table. widths: grid columns in twips; ind, border and mar ([top, left, bottom, right]) in pt;
+// borders: 'all' or a list of sides. rows: [{ header, cantSplit, cells: [{ body, span, mar }] }].
+function docxTable({ widths, ind = 0, border = 0, borders = 'all', mar = [0, 0, 0, 0] }, rows) {
+  const marXml = (m) => ['top', 'left', 'bottom', 'right'].map((s, i) => `<w:${s} w:w="${twips(m[i])}" w:type="dxa"/>`).join('');
+  const sides = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map((s) => (border && (borders === 'all' || borders.includes(s))
+    ? `<w:${s} w:val="single" w:sz="${Math.round(border * 8)}" w:space="0" w:color="000000"/>`
+    : `<w:${s} w:val="nil"/>`)).join('');
+  const sum = (list) => list.reduce((a, b) => a + b, 0);
+  return `<w:tbl><w:tblPr><w:tblW w:w="${sum(widths)}" w:type="dxa"/><w:tblInd w:w="${twips(ind)}" w:type="dxa"/>`
+    + `<w:tblBorders>${sides}</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar>${marXml(mar)}</w:tblCellMar></w:tblPr>`
+    + `<w:tblGrid>${widths.map((w) => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>`
+    + rows.map((row) => {
+      const trPr = (row.cantSplit ? '<w:cantSplit/>' : '') + (row.header ? '<w:tblHeader/>' : '');
+      let col = 0;
+      const cells = row.cells.map((cell) => {
+        const span = cell.span || 1;
+        const width = sum(widths.slice(col, col + span));
+        col += span;
+        const tcPr = `<w:tcW w:w="${width}" w:type="dxa"/>` + (span > 1 ? `<w:gridSpan w:val="${span}"/>` : '')
+          + (cell.mar ? `<w:tcMar>${marXml(cell.mar)}</w:tcMar>` : '');
+        return `<w:tc><w:tcPr>${tcPr}</w:tcPr>${cell.body || docxPara()}</w:tc>`;
+      }).join('');
+      return `<w:tr>${trPr ? `<w:trPr>${trPr}</w:trPr>` : ''}${cells}</w:tr>`;
+    }).join('') + '</w:tbl>';
+}
+
+// Inline picture run for image bytes ({ type, bytes }), added to the package
+// media and to `part`'s relationships.
+function docxImage(pkg, part, image, widthIn, heightIn) {
+  const ext = { 'image/png': 'png', 'image/jpeg': 'jpeg' }[image.type];
+  if (!ext) throw new Error('Unsupported image type for Word: ' + image.type);
+  const target = `media/image${pkg.media.length + 1}.${ext}`;
+  pkg.media.push({ name: 'word/' + target, data: image.bytes });
+  const rId = 'rId' + part.rels.push({ type: 'image', target });
+  const id = ++pkg.drawings;
+  const cx = Math.round(widthIn * 914400);
+  const cy = Math.round(heightIn * 914400);
+  return `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/>`
+    + `<wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${id}" name="Picture ${id}"/>`
+    + '<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'
+    + `<a:graphic><a:graphicData uri="${DOCX_NS.pic}"><pic:pic><pic:nvPicPr><pic:cNvPr id="${id}" name="image${id}.${ext}"/><pic:cNvPicPr/></pic:nvPicPr>`
+    + `<pic:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>`
+    + `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>`
+    + '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+}
+
+// A photo cell as the PDF flows it (photoLayout(), css — photos): one
+// paragraph (or, for photos of mixed heights, one table) per row of photos,
+// `gapIn` between photos and between rows.
+function docxPhotoFlow(pkg, part, report, kind, display, ids, photos, { before = 0, after = 0, ind = 0 } = {}) {
+  const layout = photoLayout(report, kind, display, ids.filter((id) => photos[id]));
+  const cellW = printPhotoCellWidthIn(report, kind);
+  const gap = layout.gapIn;
+  const rows = [];
+  let x = 0;
+  for (const { id, width } of layout.photos) {
+    const image = dataUrlBytes(photos[id]);
+    const px = imageSize(image.bytes) || { width: 4, height: 3 };
+    const ar = px.width / px.height;
+    const w = Math.min((width / 100) * cellW - gap * (1 - width / 100), layout.maxHeightIn * ar);
+    const photo = { image, w, h: w / ar };
+    const row = rows[rows.length - 1];
+    if (!row || x + gap + w > cellW + 1e-3) { rows.push([photo]); x = w; } else { row.push(photo); x += gap + w; }
+  }
+  const gapPt = gap * 72;
+  // The space between photos: a 1pt space widened by character spacing (less a little, so a full row fits).
+  const space = `<w:r><w:rPr>${docxRPr({ spacing: gapPt - 0.75, size: 1 })}</w:rPr><w:t xml:space="preserve"> </w:t></w:r>`;
+  const mark = docxRPr({ size: 1 });
+  const out = [];
+  let above = before; // pt above the next row
+  rows.forEach((row, i) => {
+    const last = i === rows.length - 1;
+    const top = Math.max(...row.map((p) => p.h));
+    const img = (p) => docxImage(pkg, part, p.image, p.w, p.h);
+    if (row.every((p) => top - p.h < 0.01)) {
+      out.push(docxPara({ before: above, after: last ? after : gapPt, ind, mark }, row.map((p, j) => (j ? space : '') + img(p)).join('')));
+      above = 0;
+      return;
+    }
+    // Word lines up inline photos at the bottom; a borderless table tops them like the PDF.
+    if (above) out.push(docxPara({ line: above }));
+    out.push(docxTable({ widths: row.map((p, j) => twips(p.w * 72 + (j ? gapPt : 0))), ind }, [{
+      cells: row.map((p, j) => ({ body: docxPara({ mark }, img(p)), mar: [0, j ? gapPt : 0, 0, 0] })),
+    }]));
+    above = gapPt;
+    if (last) out.push(docxPara({ line: Math.max(after, 1) }));
+  });
+  return out.join('');
+}
+
+// A pill paragraph (css — print .pr-pill); kind is a DOCX_PILL_COLORS key, or bg overrides it.
+// It may run into the cell's right padding, as the PDF's unwrapped pill overflows a narrow column.
+function docxPill(text, kind, bg, before) {
+  const [fill, color] = DOCX_PILL_COLORS[kind];
+  return docxPara({ before, line: 8.45, right: -4 }, docxRun(text, docxRPr({ size: 6.5, color, fill: bg || fill })));
+}
+
+// Status and tag pills per the PDF settings, as printItemPills().
+function docxPills(report, item, { status = true } = {}) {
+  const c = report.config;
+  const pills = [];
+  if (status && c.pdfShowStatus) {
+    pills.push(item.status === 'complete' ? ['Complete ' + formatDate(item.completedDate), 'complete'] : ['Incomplete', 'plain']);
+  }
+  if (c.pdfShowTags) {
+    for (const id of item.tagIds) {
+      const t = report.tags.find((x) => x.id === id);
+      if (t) pills.push([t.name, 'plain', TAG_COLORS[t.color]]);
+    }
+  }
+  return pills.map(([text, kind, bg], i) => docxPill(text, kind, bg, i ? 2 : 3)).join('');
+}
+
+// The report as a .docx (Uint8Array). images: { logo, photos: { [id]: url } },
+// PNG or JPEG data URLs; photos already flattened, as for the PDF.
+function toDocx(report, images = {}) {
+  const r = report;
+  const c = r.config;
+  const hd = r.header;
+  const photos = images.photos || {};
+  const pkg = { media: [], drawings: 0 };
+  const doc = { rels: [] };
+  const firstHeader = { rels: [] };
+  const W = DOCX_PAGE_WIDTH_PT;
+  const text = (value, rPr) => docxRun(value, rPr);
+  const body = [];
+
+  // Title, 1in below the masthead (in the first page header).
+  const firstTop = 0.6 * 72 + 29.25 + 72;
+  body.push(docxPara({ before: firstTop - 1.55 * 72, line: 24, borderBottom: { size: 0.75, space: 1 } },
+    text(reportTitle(r).toUpperCase(), docxRPr({ size: 20, color: '#A6A6A6', spacing: 2.4 }))));
+
+  // Header fields: three label/value columns (134fr 224fr 106fr) after 3pt padding.
+  const fr = [134, 224, 106];
+  const labelW = [46, 40, 56];
+  const colW = fr.map((f) => ((W - 3) * f) / 464);
+  const fieldWidths = [twips(labelW[0] + 3), twips(colW[0] - labelW[0]), twips(labelW[1]), twips(colW[1] - labelW[1]), twips(labelW[2])];
+  fieldWidths.push(twips(W) - fieldWidths.reduce((a, b) => a + b, 0));
+  const fieldRow = (top, bottom, fields) => ({
+    cells: fields.flatMap(([label, value], i) => [
+      { body: label ? docxPara({ line: 10.8 }, text(label + ':')) : '', mar: [top, i ? 0 : 3, bottom, 0] },
+      { body: docxPara({ line: 10.8 }, text(value || '')), mar: [top, 0, bottom, 6] },
+    ]),
+  });
+  body.push(docxTable({ widths: fieldWidths, border: 0.75, borders: ['bottom'] }, [
+    fieldRow(10, 0, [['By', hd.author], ['Purpose', hd.purpose], ['Report Date', formatDate(hd.reportDate)]]),
+    fieldRow(5, 0, [['Visit Date', formatDate(hd.visitDate)], ['Project', hd.project], ['Project No.', hd.projectNumber]]),
+    fieldRow(20, 0, [['Time', hd.time], ['Weather', hd.weather], ['Distribution', hd.distribution.join(', ')]]),
+    fieldRow(5, 1, [['Attendees', hd.attendees.map(formatAttendee).join(', ')], ['', ''], ['', '']]),
+  ]));
+
+  body.push(docxPara({ before: 21, after: 8, line: 9.36, jc: 'both' }, text(r.disclaimer, docxRPr({ size: 8 }))));
+
+  // General observations: a boxed, numbered list.
+  const general = docxPara({ after: 2, line: 11.5 }, text('General Observations/Comments', docxRPr({ demi: true, size: 10 })))
+    + r.generalObservations.map((g) => {
+      const flow = docxPhotoFlow(pkg, doc, r, 'gen', g.display, g.images, photos, { before: 8, after: 4, ind: 40 });
+      return docxPara({ numId: 1, line: 11.5, after: flow ? 0 : 3 }, text(g.text, docxRPr({ size: 10 }))) + flow;
+    }).join('');
+  body.push(docxTable({ widths: [twips(W - 5)], ind: 5, border: 1, mar: [3, 6, 2, 6] }, [{ cells: [{ body: general }] }]));
+
+  // Observations table: 0.3in below, 5pt in, 6pt narrower than the page.
+  const tableW = twips(W - 6);
+  const gridOf = (pcts) => {
+    const total = pcts.reduce((a, b) => a + b, 0) || 1;
+    return pcts.map((p) => Math.round((tableW * p) / total));
+  };
+  const head = (labels, size) => ({
+    header: true, cantSplit: true,
+    cells: labels.map((t) => ({ body: docxPara({ line: size * 1.1 }, text(t, docxRPr({ demi: true, size }))) })),
+  });
+  if (r.observations.length) {
+    body.push(docxPara({ line: 0.3 * 72 }));
+    const th = head(COLUMN_LABELS, 10);
+    th.cells.forEach((cell) => { cell.mar = [3, 4, 8, 4]; });
+    body.push(docxTable({ widths: gridOf(printColumnWidths(r)), ind: 5, border: 1, mar: [3, 4, 4, 4] }, [th,
+      ...r.observations.map((o) => ({
+        cantSplit: true,
+        cells: [
+          { body: docxPara({ line: 12 }, text(o.number, docxRPr({ size: 10 }))) + docxPills(r, o) },
+          { body: docxPara({ line: 10.8 }, text(o.description)) },
+          { body: docxPhotoFlow(pkg, doc, r, 'obs', o.display, o.photoIds, photos), mar: [3.75, 3.75, 3.75, 3.75] },
+          { body: docxPara({ line: 10.8 }, text(o.requirement)) },
+        ],
+      }))]));
+  }
+
+  // Open items from previous reports, as renderPrint().
+  if (c.carryForward && r.inherited.length && c.pdfShowReminders) {
+    body.push(docxPara({ before: 0.3 * 72, after: 4, line: 13.2, ind: 5, keepNext: true },
+      text('Open Items from Previous Reports', docxRPr({ demi: true, size: 11 }))));
+    for (const g of reminderGroups(r)) {
+      body.push(docxPara({ before: 8, after: 3, line: 11.4, ind: 5, keepNext: true }, text(g.title, docxRPr({ demi: true, size: 9.5, color: '#555555' }))));
+      const cell = (value) => ({ body: docxPara({ line: 10.2 }, text(value, docxRPr({ size: 8.5 }))) });
+      body.push(docxTable({ widths: gridOf([8, 38, 33, 21]), ind: 5, border: 0.75, mar: [2.5, 4, 2.5, 4] }, [
+        head(['Item', 'Observation', 'Contract Requirement', 'Status'], 9),
+        ...g.items.map((o) => ({
+          cantSplit: true,
+          cells: [
+            { body: cell(o.originalNumber).body + docxPills(r, o, { status: false }) },
+            cell(o.description),
+            cell(o.requirement),
+            { body: o.status === 'complete' ? docxPill('Complete ' + formatDate(o.completedDate), 'complete', null, 0) : docxPill('Open', 'open', null, 0) },
+          ],
+        })),
+      ]));
+    }
+  }
+  body.push(docxPara({ line: 1 }));
+
+  // First page header: logo left, tagline right (.pr-masthead). Later pages: the running header.
+  const logo = dataUrlBytes(images.logo || c.logo || DEFAULT_LOGO);
+  const logoPx = imageSize(logo.bytes) || { width: 4, height: 1 };
+  const logoH = 29.25;
+  const logoW = Math.min(W / 2, (logoH * logoPx.width) / logoPx.height);
+  const masthead = docxTable({ widths: [twips(logoW), twips(W) - twips(logoW)] }, [{
+    cells: [
+      { body: docxPara({ mark: docxRPr({ size: 1 }) }, docxImage(pkg, firstHeader, logo, logoW / 72, logoH / 72)) },
+      { body: docxPara({ before: 5, line: 7.8, jc: 'right' }, text(c.mastheadTagline, docxRPr({ size: 6.5, spacing: 1.3, color: '#8C8C8C' }))) },
+    ],
+  }]) + docxPara({ line: 1 });
+  const runRPr = docxRPr({ size: 9, color: '#666666' });
+  const fieldRun = (instr) => `<w:fldSimple w:instr=" ${instr} "><w:r><w:rPr>${runRPr}</w:rPr><w:t>1</w:t></w:r></w:fldSimple>`;
+  const running = [reportTitle(r), hd.project, formatDate(hd.reportDate)].filter(Boolean)
+    .map((line) => docxPara({ line: 14 }, text(line, runRPr))).join('')
+    + docxPara({ line: 14 }, text('Page ', runRPr) + fieldRun('PAGE') + text(' of ', runRPr) + fieldRun('NUMPAGES'));
+  const footer = docxPara({ line: 8.4, jc: 'center' },
+    text(c.footerText.replace(/\s*\|\s*/g, '     |     '), docxRPr({ size: 7, spacing: 0.7, color: '#A6A6A6' })));
+
+  const ns = Object.entries(DOCX_NS).map(([k, v]) => ` xmlns:${k}="${v}"`).join('');
+  const rid = (part, type, target) => 'rId' + part.rels.push({ type, target });
+  const sect = `<w:sectPr><w:headerReference w:type="first" r:id="${rid(doc, 'header', 'header1.xml')}"/>`
+    + `<w:headerReference w:type="default" r:id="${rid(doc, 'header', 'header2.xml')}"/>`
+    + `<w:footerReference w:type="first" r:id="${rid(doc, 'footer', 'footer1.xml')}"/>`
+    + '<w:pgSz w:w="12240" w:h="15840"/>'
+    + `<w:pgMar w:top="${1.55 * 1440}" w:right="1440" w:bottom="${0.8 * 1440}" w:left="1440" w:header="${0.6 * 1440}" w:footer="${Math.round(0.38 * 1440)}" w:gutter="0"/>`
+    + '<w:titlePg/></w:sectPr>';
+  for (const type of ['styles', 'settings', 'numbering', 'fontTable']) rid(doc, type, type + '.xml');
+  const relsXml = (rels) => XML_HEAD + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    + rels.map((x, i) => `<Relationship Id="${x.id || 'rId' + (i + 1)}" Type="${x.full || DOCX_REL + x.type}" Target="${x.target}"/>`).join('')
+    + '</Relationships>';
+  const hdrFtr = (tag, content) => `${XML_HEAD}<w:${tag}${ns}>${content}</w:${tag}>`;
+  const wordType = (name) => `application/vnd.openxmlformats-officedocument.wordprocessingml.${name}+xml`;
+  const overrides = [['/word/document.xml', wordType('document.main')], ['/word/styles.xml', wordType('styles')],
+    ['/word/settings.xml', wordType('settings')], ['/word/numbering.xml', wordType('numbering')], ['/word/fontTable.xml', wordType('fontTable')],
+    ['/word/header1.xml', wordType('header')], ['/word/header2.xml', wordType('header')], ['/word/footer1.xml', wordType('footer')],
+    ['/docProps/core.xml', 'application/vnd.openxmlformats-package.core-properties+xml']];
+  const font = `w:ascii="${DOCX_FONT}" w:eastAsia="${DOCX_FONT}" w:hAnsi="${DOCX_FONT}" w:cs="${DOCX_FONT}"`;
+  const W_NS = `xmlns:w="${DOCX_NS.w}"`;
+
+  return zipStore([
+    { name: '[Content_Types].xml', data: XML_HEAD + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      + '<Default Extension="xml" ContentType="application/xml"/>'
+      + '<Default Extension="jpeg" ContentType="image/jpeg"/><Default Extension="png" ContentType="image/png"/>'
+      + overrides.map(([part, type]) => `<Override PartName="${part}" ContentType="${type}"/>`).join('') + '</Types>' },
+    { name: '_rels/.rels', data: relsXml([
+      { id: 'rId1', full: DOCX_REL + 'officeDocument', target: 'word/document.xml' },
+      { id: 'rId2', full: 'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties', target: 'docProps/core.xml' },
+    ]) },
+    { name: 'docProps/core.xml', data: XML_HEAD + '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"'
+      + ' xmlns:dc="http://purl.org/dc/elements/1.1/">'
+      + `<dc:title>${xmlText([reportTitle(r), hd.project].filter(Boolean).join(' · '))}</dc:title><dc:creator>${xmlText(hd.author)}</dc:creator>`
+      + '</cp:coreProperties>' },
+    { name: 'word/document.xml', data: `${XML_HEAD}<w:document${ns}><w:body>${body.join('')}${sect}</w:body></w:document>` },
+    { name: 'word/_rels/document.xml.rels', data: relsXml(doc.rels) },
+    { name: 'word/styles.xml', data: `${XML_HEAD}<w:styles ${W_NS}><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts ${font}/>`
+      + '<w:color w:val="000000"/><w:sz w:val="18"/><w:szCs w:val="18"/><w:lang w:val="en-US"/></w:rPr></w:rPrDefault>'
+      + '<w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>'
+      + '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>'
+      + '<w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/><w:tblPr>'
+      + '<w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/>'
+      + '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style></w:styles>' },
+    { name: 'word/settings.xml', data: `${XML_HEAD}<w:settings ${W_NS}><w:defaultTabStop w:val="720"/>`
+      + '<w:characterSpacingControl w:val="doNotCompress"/><w:compat>'
+      + '<w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/>'
+      + '</w:compat></w:settings>' },
+    // General observations list: "1." right-aligned ending 34pt in, text at 40pt (.pr-general ol).
+    { name: 'word/numbering.xml', data: `${XML_HEAD}<w:numbering ${W_NS}><w:abstractNum w:abstractNumId="0">`
+      + '<w:multiLevelType w:val="singleLevel"/><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/>'
+      + `<w:lvlText w:val="%1."/><w:lvlJc w:val="right"/><w:pPr><w:tabs><w:tab w:val="num" w:pos="${twips(40)}"/></w:tabs>`
+      + `<w:ind w:left="${twips(40)}" w:hanging="${twips(6)}"/></w:pPr><w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr></w:lvl>`
+      + '</w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>' },
+    // Without Franklin Gothic, fall back to Arial, as the PDF's font stack does.
+    { name: 'word/fontTable.xml', data: `${XML_HEAD}<w:fonts ${W_NS}>` + [[DOCX_FONT, '05'], [DOCX_FONT_DEMI, '07']].map(([name, weight]) => `<w:font w:name="${name}"><w:altName w:val="Arial"/>`
+      + `<w:panose1 w:val="020B${weight}03020102020204"/><w:family w:val="swiss"/><w:pitch w:val="variable"/></w:font>`).join('')
+      + '</w:fonts>' },
+    { name: 'word/header1.xml', data: hdrFtr('hdr', masthead) },
+    { name: 'word/_rels/header1.xml.rels', data: relsXml(firstHeader.rels) },
+    { name: 'word/header2.xml', data: hdrFtr('hdr', running) },
+    { name: 'word/footer1.xml', data: hdrFtr('ftr', footer) },
+    ...pkg.media,
+  ]);
+}
+
 /* ==== SECTION: core — messages and debug log ==== */
 
 const OPEN_IN_BROWSER_HELP =
@@ -758,6 +1226,11 @@ const MESSAGES = {
   PDF_PREPARE_FAILED: {
     title: 'Could not prepare the PDF',
     message: 'The PDF could not be prepared.',
+    action: 'Try again. ' + SEND_DEBUG_HELP,
+  },
+  DOCX_EXPORT_FAILED: {
+    title: 'Could not export Word document',
+    message: 'The Word document could not be made.',
     action: 'Try again. ' + SEND_DEBUG_HELP,
   },
   DEBUG_INFO_DOWNLOADED: {
@@ -848,6 +1321,7 @@ const Core = Object.freeze({
   History, snapshotReport, restoreSnapshot,
   fileBaseName, referencedPhotoIds, serializeReport, migrate, normalizeReport, parseReport,
   csvField, toCSV, officeDefaultsJSON, applyOfficeDefaults,
+  DOCX_MIME, crc32, zipStore, dataUrlBytes, imageSize, toDocx,
   MESSAGES, LOG_CODES, DebugLog, userError, describeError, formatDebugReport,
 });
 </script>
@@ -1447,6 +1921,7 @@ const ICON_PATHS = {
   save: '<path d="M4 3h9.5L17 6.5V16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M6.5 3v4h6V3M6 17v-5.5h8V17"/>',
   saveAs: '<path d="M4 3h9.5L17 6.5V9M10 17H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1"/><path d="M6.5 3v4h6V3M13 17l4.5-4.5-1.5-1.5L11.5 15.5V17z"/>',
   pdf: '<path d="M5 2.5h7l3.5 3.5v11.5h-10.5z"/><path d="M12 2.5V6h3.5M7.5 10.5h5M7.5 13.5h5"/>',
+  docx: '<path d="M5 2.5h7l3.5 3.5v11.5h-10.5z"/><path d="M12 2.5V6h3.5M7 9.5l1.3 5 1.7-3.5 1.7 3.5 1.3-5"/>',
   csv: '<rect x="3" y="3.5" width="14" height="13" rx="1"/><path d="M3 8h14M3 12.3h14M8 3.5v13"/>',
   gear: '<circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4"/>',
   more: '<circle cx="4.5" cy="10" r="1.3" fill="currentColor"/><circle cx="10" cy="10" r="1.3" fill="currentColor"/><circle cx="15.5" cy="10" r="1.3" fill="currentColor"/>',
@@ -1873,6 +2348,7 @@ const TOOLBAR_ACTIONS = [
   { action: 'save', label: 'Save', icon: 'save' },
   { action: 'save-as', label: 'Save As', icon: 'saveAs', secondary: true },
   { action: 'export-pdf', label: 'Export PDF', icon: 'pdf', primary: true },
+  { action: 'export-docx', label: 'Export Word', icon: 'docx', secondary: true },
   { action: 'export-csv', label: 'Export CSV', icon: 'csv', secondary: true },
 ];
 
@@ -1900,6 +2376,7 @@ function runAction(action, anchor) {
     case 'save': return saveReport();
     case 'save-as': return saveReport({ saveAs: true });
     case 'export-pdf': return exportPDF();
+    case 'export-docx': return exportDOCX();
     case 'export-csv': return exportCSV();
     case 'config': return openConfig();
     case 'overflow': return showMenu(anchor, TOOLBAR_ACTIONS.filter((a) => a.secondary)
@@ -2172,8 +2649,6 @@ function renderGeneral() {
 }
 
 /* ==== SECTION: app — render: observations table ==== */
-
-const COLUMN_LABELS = ['Item', 'Observation', 'Supporting Photo', 'Contract Requirement'];
 
 function renderObservations() {
   const r = state.report;
@@ -4482,6 +4957,41 @@ function bindPrintEvents() {
     document.title = 'Field Observation Report';
     state.printPrepared = false;
   });
+}
+
+/* ==== SECTION: app — export: Word (docx) ==== */
+
+// Word takes PNG and JPEG; any other logo (SVG, WebP, GIF) is redrawn as PNG.
+async function docxLogo(url) {
+  if (/^data:image\/(png|jpeg);/.test(url)) return url;
+  const img = await loadImage(url);
+  const canvas = h('canvas', { width: img.naturalWidth || 600, height: img.naturalHeight || 150 });
+  canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/png');
+}
+
+// Same photos as the PDF (flattened at the PDF export size and quality), laid out by toDocx().
+async function exportDOCX() {
+  closePopover();
+  const r = renumber(state.report);
+  const { photoExportMaxSide: size, photoExportQuality: quality } = r.config;
+  showBusy('Preparing Word document…');
+  let bytes;
+  try {
+    const photos = {};
+    await Promise.all(printPhotoIds().map(async (id) => {
+      photos[id] = await flattenPhoto(r.photos[id], size, quality);
+    }));
+    bytes = toDocx(r, { logo: await docxLogo(r.config.logo || DEFAULT_LOGO), photos });
+  } catch (err) {
+    hideBusy();
+    return notify.error('DOCX_EXPORT_FAILED', { err });
+  }
+  hideBusy();
+  const name = defaultFileName('.docx');
+  downloadBlob(name, new Blob([bytes], { type: DOCX_MIME }));
+  toast('Word document exported: ' + name);
+  return undefined;
 }
 
 /* ==== SECTION: app — config panel ==== */
