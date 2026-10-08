@@ -44,18 +44,18 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 | app — sorting and column resize | 2476–2565 |
 | app — photos: import, cells, drag and drop | 2566–2791 |
 | app — photos: pointer drag | 2792–2958 |
-| app — photos: selection, resize and cell menu | 2959–3159 |
-| app — photos: in-cell crop and rotate | 3160–3286 |
-| app — photos: flatten and markup drawing | 3287–3499 |
-| app — photo editor | 3500–4032 |
-| app — persistence: files | 4033–4183 |
-| app — persistence: autosave (IndexedDB) | 4184–4272 |
-| app — export: CSV | 4273–4280 |
-| app — export: PDF (print) | 4281–4481 |
-| app — config panel | 4482–4671 |
-| app — office defaults (developer stub) | 4672–4686 |
-| app — password gate | 4687–4712 |
-| app — keyboard, window events and init | 4713–4815 |
+| app — photos: selection, resize and cell menu | 2959–3162 |
+| app — photos: in-cell crop and rotate | 3163–3289 |
+| app — photos: flatten and markup drawing | 3290–3502 |
+| app — photo editor | 3503–4035 |
+| app — persistence: files | 4036–4186 |
+| app — persistence: autosave (IndexedDB) | 4187–4275 |
+| app — export: CSV | 4276–4283 |
+| app — export: PDF (print) | 4284–4484 |
+| app — config panel | 4485–4674 |
+| app — office defaults (developer stub) | 4675–4689 |
+| app — password gate | 4690–4715 |
+| app — keyboard, window events and init | 4716–4818 |
 
 ## 2. Modules
 

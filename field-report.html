@@ -3072,7 +3072,10 @@ function startPhotoResize(e, handle) {
   const gap = parseFloat(getComputedStyle(flow).columnGap) || 0;
   const flowWidth = flow.clientWidth;
   const startPct = Number(fig.style.getPropertyValue('--w')) || 100;
-  const startWidth = (startPct / 100) * (flowWidth + gap) - gap;
+  // The photo's rendered width, not startPct's: a height-capped photo (see
+  // css — photos) renders narrower than its --w, and the handle sits at that
+  // narrower edge, so the drag must start measuring from there too.
+  const startWidth = fig.getBoundingClientRect().width;
   const sign = handle.dataset.corner.endsWith('e') ? 1 : -1;
   const label = $('.photo-size', fig);
   let pct = startPct;
