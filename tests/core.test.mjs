@@ -251,9 +251,10 @@ test('filters match by status and any selected tag', () => {
 test('PDF column widths come from config without touching saved data', () => {
   const r = sampleReport();
   r.ui.columnWidths = [10, 30, 30, 30];
-  deepEq(plain(Core.printColumnWidths(r)), [8, 38, 33, 21]);
-  r.config.pdfUseScreenWidths = true;
+  // On by default (issue #55): the PDF matches the columns as adjusted on screen.
   deepEq(plain(Core.printColumnWidths(r)), [10, 30, 30, 30]);
+  r.config.pdfUseScreenWidths = false;
+  deepEq(plain(Core.printColumnWidths(r)), [8, 38, 33, 21]);
 });
 
 test('office defaults export and import config plus tags', () => {
@@ -410,6 +411,7 @@ test('print height caps default to 2 in (table) and 4 in (general), clamped to 1
 
 test('print photo cell width follows the PDF column widths', () => {
   const r = sampleReport();
+  r.config.pdfUseScreenWidths = false;
   const table = Core.printPhotoCellWidthIn(r, 'obs');
   // Less 5px padding per side and half of each 1pt collapsed border.
   assert.ok(Math.abs(table - ((6.5 - 6 / 72) * 0.33 - 10 / 96 - 1 / 72)) < 1e-9, String(table));
@@ -446,6 +448,7 @@ test('photo scale gives the PDF cap and gap, and their ratios to the PDF cell wi
     assert.ok(Math.abs(scale.gapRatio - scale.gapIn / cellIn) < 1e-12, kind);
   }
   // A wider PDF photo column: the same gap and cap are a smaller share of it.
+  r.config.pdfUseScreenWidths = false;
   const before = Core.photoScale(r, 'obs');
   r.ui.columnWidths = [8, 30, 42, 20];
   r.config.pdfUseScreenWidths = true;
