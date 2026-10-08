@@ -3080,7 +3080,11 @@ function startPhotoResize(e, handle) {
   const show = (value) => { fig.style.setProperty('--w', value); if (label) label.textContent = photoWidthLabel(value); };
   const move = (ev) => {
     const width = startWidth + sign * (ev.clientX - e.clientX);
-    pct = snapPhotoWidth(((width + gap) / (flowWidth + gap)) * 100);
+    fig.style.setProperty('--w', snapPhotoWidth(((width + gap) / (flowWidth + gap)) * 100));
+    // The height cap (--cap-h × --ar in css — photos) can hold the photo
+    // narrower than the dragged width; read back what actually rendered so
+    // the shown/stored percentage never drifts from the photo's real size.
+    pct = snapPhotoWidth(((fig.getBoundingClientRect().width + gap) / (flowWidth + gap)) * 100);
     show(pct);
   };
   const end = (commit) => {
