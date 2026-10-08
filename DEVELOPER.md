@@ -588,7 +588,7 @@ App-only `state`: `fileHandle`, `fileName`, `dirty`, `changeCount`,
 | `numberingPattern` | string | `{report}.{item:02}` | `renumber()` |
 | `numberingStart` | number | `1` | `renumber()` |
 | `carryForward` | boolean | `true` | `nextReportFrom()`, `remindersVisible()`, `newReportAction()` |
-| `pdfUseScreenWidths` | boolean | `false` | `printColumnWidths()` |
+| `pdfUseScreenWidths` | boolean | `true` | `printColumnWidths()` |
 | `pdfShowStatus` | boolean | `false` | `printItemPills()` |
 | `pdfShowTags` | boolean | `false` | `printItemPills()` |
 | `pdfShowReminders` | boolean | `true` | `renderPrint()` |

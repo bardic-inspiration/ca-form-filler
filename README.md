@@ -140,7 +140,7 @@ Settings are saved with each report and apply right away.
 | Numbering format | 1.01, 01.01, 1, A.1, or your own pattern |
 | Start numbering at | First item number |
 | Carry forward incomplete items | Turns the "Next report" open-items list on or off |
-| Apply on-screen column widths | PDF uses your column widths instead of the template's |
+| Apply on-screen column widths | On by default: the PDF matches your column widths. Off uses the template's |
 | Show completion status | PDF shows the status pill under each item number |
 | Show scope tags | PDF shows tags under each item number |
 | Show Reminders section | PDF includes Open Items from Previous Reports |
