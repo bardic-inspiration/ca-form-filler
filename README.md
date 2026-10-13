@@ -129,6 +129,9 @@ them as PDFs that match the Word template.
   1. Destination: **Save as PDF**
   2. More settings → **Headers and footers: off**
   3. More settings → **Background graphics: on**
+- **Export Word** (in the ⋯ menu on narrow screens) saves a `.docx` that
+  looks like the PDF, for anyone who wants to edit the report in Microsoft
+  Word without this tool. It follows the same PDF settings (section 8).
 - **Export CSV** saves a spreadsheet of all items for tracking in Excel.
 
 ## 8. Settings (gear icon)
@@ -140,11 +143,11 @@ Settings are saved with each report and apply right away.
 | Numbering format | 1.01, 01.01, 1, A.1, or your own pattern |
 | Start numbering at | First item number |
 | Carry forward incomplete items | Turns the "Next report" open-items list on or off |
-| Apply on-screen column widths | On by default: the PDF matches your column widths. Off uses the template's |
-| Show completion status | PDF shows the status pill under each item number |
-| Show scope tags | PDF shows tags under each item number |
-| Show Reminders section | PDF includes Open Items from Previous Reports |
-| Photo export size / quality | Smaller numbers make smaller PDFs |
+| Apply on-screen column widths | On by default: the PDF and Word match your column widths. Off uses the template's |
+| Show completion status | PDF and Word show the status pill under each item number |
+| Show scope tags | PDF and Word show tags under each item number |
+| Show Reminders section | PDF and Word include Open Items from Previous Reports |
+| Photo export size / quality | Smaller numbers make smaller PDFs and Word files |
 | Table photo max height | Tallest a table photo may print, 1–6 in (default 2 in) |
 | General Observations image max height | Tallest a General Observations photo may print, 1–6 in (default 4 in) |
 | Default markup color | Starting color in the photo editor |
@@ -171,8 +174,8 @@ what to do next.
   is probably open in another app's viewer (for example the Files app), which
   can't choose files or print. The tool shows a message when this happens.
   Open the file with **Chrome** instead: ⋮ → Open with → Chrome.
-- **The PDF font looks different.** The report uses Franklin Gothic. If it
-  isn't installed on your computer, a similar font is used instead.
+- **The PDF or Word font looks different.** The report uses Franklin Gothic.
+  If it isn't installed on your computer, a similar font is used instead.
 - **Save downloads a copy instead of updating the file.** Some browsers or
   settings don't allow saving over files. Your report is in the Downloads
   folder; open it from there next time.
