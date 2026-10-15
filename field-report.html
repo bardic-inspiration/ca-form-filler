@@ -515,6 +515,35 @@ function normalizeCrop(crop, W, H) {
   return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
 }
 
+// Resize handles of a selected text shape: the corners of its box grown by pad.
+function textHandles(box, pad) {
+  const x1 = box.x - pad;
+  const y1 = box.y - pad;
+  const x2 = box.x + box.w + pad;
+  const y2 = box.y + box.h + pad;
+  return [{ handle: 'nw', x: x1, y: y1 }, { handle: 'ne', x: x2, y: y1 }, { handle: 'sw', x: x1, y: y2 }, { handle: 'se', x: x2, y: y2 }];
+}
+
+function hitTextHandle(box, pad, x, y, tol) {
+  const hit = textHandles(box, pad).find((c) => Math.abs(x - c.x) <= tol && Math.abs(y - c.y) <= tol);
+  return hit ? hit.handle : null;
+}
+
+// Drag a text shape's corner handle from start to p, scaling its font size;
+// the opposite corner of its box stays put. box is the shape's box at start.
+function resizeText(shape, box, handle, start, p, minSize) {
+  const ax = handle.includes('w') ? box.x + box.w : box.x;
+  const ay = handle.includes('n') ? box.y + box.h : box.y;
+  const vx = start.x - ax;
+  const vy = start.y - ay;
+  const len2 = vx * vx + vy * vy;
+  const along = len2 ? ((p.x - ax) * vx + (p.y - ay) * vy) / len2 : 1;
+  const factor = Math.max(minSize / shape.size, along);
+  const w = box.w * factor;
+  const h = box.h * factor;
+  return { x: handle.includes('w') ? ax - w : ax, y: handle.includes('n') ? ay - h : ay, size: shape.size * factor };
+}
+
 /* ==== SECTION: core — undo history ==== */
 
 class History {
@@ -1317,7 +1346,7 @@ const Core = Object.freeze({
   tagUsage, deleteTag, matchesFilter, printColumnWidths,
   validPhotoWidth, snapPhotoWidth, photoWidthLabel, cellDisplay, autoArrangements, cellArrangement, effectivePhotoWidth, photoMaxHeightIn, printPhotoCellWidthIn, photoScale, photoLayout,
   setPhotoArrangement, makePhotoCellManual, resetPhotoCell, photoCountChanged, movePhoto, stepPhoto,
-  rotateCrop90, resizeCrop, normalizeCrop,
+  rotateCrop90, resizeCrop, normalizeCrop, textHandles, hitTextHandle, resizeText,
   History, snapshotReport, restoreSnapshot,
   fileBaseName, referencedPhotoIds, serializeReport, migrate, normalizeReport, parseReport,
   csvField, toCSV, officeDefaultsJSON, applyOfficeDefaults,
@@ -3999,6 +4028,7 @@ const editor = {
   photoId: null, work: null, img: null, tool: 'select', color: '#F26A21', widthIndex: 1,
   view: { scale: 1, ox: 0, oy: 0 }, selectedId: null, draft: null, cropDraft: null,
   undo: [], redo: [], drag: null, pointers: new Map(), pinch: null, spaceDown: false, frame: 0, textInput: null,
+  lastTap: null,
 };
 
 function editorIsOpen() {
@@ -4064,7 +4094,7 @@ async function openPhotoEditor(photoId) {
     photoId,
     work: { original: photo.original, crop: clone(photo.crop), markup: clone(photo.markup) },
     tool: 'select', color: state.report.config.markupColor || '#F26A21', widthIndex: 1,
-    selectedId: null, draft: null, cropDraft: null, undo: [], redo: [], drag: null, pinch: null,
+    selectedId: null, draft: null, cropDraft: null, undo: [], redo: [], drag: null, pinch: null, lastTap: null,
   });
   editor.pointers.clear();
   try {
@@ -4128,10 +4158,11 @@ function zoomEditorAt(x, y, factor) {
 function setEditorTool(tool) {
   editor.tool = tool;
   if (tool !== 'select') editor.selectedId = null;
+  $('#pe-canvas').style.cursor = '';
   $$('#pe-bar [data-tool]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === tool)));
   $('#pe-stage').classList.toggle('tool-select', tool === 'select');
   const hints = {
-    select: 'Click a shape to select it, drag to move. Drag empty space to pan. Double-click text to edit.',
+    select: 'Click a shape to select it, drag to move. Drag empty space to pan. Double-click text to edit; drag its corners to resize.',
     crop: 'Drag over the photo to set the crop area.',
     text: 'Click where the text should go, type, then press Enter.',
     dimension: 'Drag to draw the dimension line, then type its label.',
@@ -4280,7 +4311,24 @@ function renderEditor() {
     ctx.setLineDash([5 / scale, 4 / scale]);
     ctx.strokeRect(b.x - pad, b.y - pad, b.w + pad * 2, b.h + pad * 2);
     ctx.setLineDash([]);
+    if (sel.type === 'text') {
+      const r = 4 / scale;
+      ctx.fillStyle = '#fff';
+      for (const c of textHandles(b, pad)) {
+        ctx.fillRect(c.x - r, c.y - r, r * 2, r * 2);
+        ctx.strokeRect(c.x - r, c.y - r, r * 2, r * 2);
+      }
+    }
   }
+}
+
+// The selected text shape's resize handle at p: { handle, box }, else null.
+function textHandleAt(p) {
+  const sel = selectedShape();
+  if (!sel || sel.type !== 'text') return null;
+  const box = shapeBounds(sel, $('#pe-canvas').getContext('2d'));
+  const handle = hitTextHandle(box, 6 / editor.view.scale, p.x, p.y, 8 / editor.view.scale);
+  return handle ? { handle, box } : null;
 }
 
 function editorPoint(e) {
@@ -4332,7 +4380,23 @@ function editorPointerDown(e) {
   if (e.button === 1 || editor.spaceDown) { editor.drag = panDrag; return undefined; }
   switch (editor.tool) {
     case 'select': {
+      const grab = textHandleAt(p);
+      if (grab) {
+        const s = selectedShape();
+        editor.drag = { mode: 'resize', ...grab, start: p, from: { x: s.x, y: s.y, size: s.size }, moved: false };
+        break;
+      }
       const hit = hitTestEditor(p);
+      // Touch has no dependable dblclick: a second tap on the same text edits it.
+      const now = e.timeStamp;
+      const tap = editor.lastTap;
+      editor.lastTap = e.pointerType === 'mouse' || !hit ? null : { id: hit.id, at: now };
+      if (tap && hit && tap.id === hit.id && now - tap.at < 400 && hit.type === 'text') {
+        editor.lastTap = null;
+        editor.drag = null;
+        openTextInput(hit, 'text', false);
+        break;
+      }
       editor.selectedId = hit ? hit.id : null;
       editor.drag = hit ? { mode: 'move', last: p, moved: false } : panDrag;
       updateEditorButtons();
@@ -4356,7 +4420,13 @@ function editorPointerDown(e) {
 }
 
 function editorPointerMove(e) {
-  if (!editor.pointers.has(e.pointerId)) return;
+  if (!editor.pointers.has(e.pointerId)) {
+    if (editor.tool === 'select' && e.pointerType === 'mouse') {
+      const grab = textHandleAt(editorPoint(e));
+      $('#pe-canvas').style.cursor = grab ? (grab.handle === 'nw' || grab.handle === 'se' ? 'nwse-resize' : 'nesw-resize') : '';
+    }
+    return;
+  }
   editor.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (editor.pinch && editor.pointers.size === 2) {
     const [a, b] = [...editor.pointers.values()];
@@ -4383,6 +4453,12 @@ function editorPointerMove(e) {
       if (!d.moved) { pushEditorUndo(); d.moved = true; }
       translateShape(s, p.x - d.last.x, p.y - d.last.y);
       d.last = p;
+    }
+  } else if (d.mode === 'resize') {
+    const s = selectedShape();
+    if (s) {
+      if (!d.moved) { pushEditorUndo(); d.moved = true; }
+      Object.assign(s, resizeText(d.from, d.box, d.handle, d.start, p, 4));
     }
   } else if (d.mode === 'crop') {
     const W = editor.img.naturalWidth;
@@ -4445,6 +4521,7 @@ function editorPointerUp(e) {
 function editorDoubleClick(e) {
   if (editor.tool !== 'select') return;
   const hit = hitTestEditor(editorPoint(e));
+  if (hit && editor.textInput && editor.textInput.shape === hit) return;
   if (hit && hit.type === 'text') openTextInput(hit, 'text', false);
   else if (hit && hit.type === 'dimension') openTextInput(hit, 'label', false);
 }

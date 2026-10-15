@@ -15,49 +15,49 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 | core — numbering | 224–246 |
 | core — inheritance | 247–296 |
 | core — tags and filters | 297–325 |
-| core — photo display | 326–517 |
-| core — undo history | 518–577 |
-| core — file formats | 578–705 |
-| core — docx export | 706–1172 |
-| core — messages and debug log | 1173–1328 |
-| css — tokens and base | 1329–1380 |
-| css — toolbar and page | 1381–1416 |
-| css — header form | 1417–1452 |
-| css — general observations | 1453–1464 |
-| css — observation table | 1465–1530 |
-| css — photos | 1531–1611 |
-| css — reminders | 1612–1619 |
-| css — popovers, dialogs, panel | 1620–1697 |
-| css — photo editor | 1698–1730 |
-| css — password gate | 1731–1743 |
-| css — responsive | 1744–1781 |
-| css — print | 1782–1843 |
-| markup — shell | 1844–1893 |
-| app — dom helpers and icons | 1894–2047 |
-| app — state and events | 2048–2142 |
-| app — dialogs and popovers | 2143–2221 |
-| app — floating toolbar | 2222–2269 |
-| app — notify: messages and debug log | 2270–2342 |
-| app — render: toolbar and header | 2343–2594 |
-| app — render: general observations | 2595–2650 |
-| app — render: observations table | 2651–2858 |
-| app — render: filters and reminders | 2859–2950 |
-| app — sorting and column resize | 2951–3040 |
-| app — photos: import, cells, drag and drop | 3041–3266 |
-| app — photos: pointer drag | 3267–3433 |
-| app — photos: selection, resize and cell menu | 3434–3639 |
-| app — photos: in-cell crop and rotate | 3640–3766 |
-| app — photos: flatten and markup drawing | 3767–3979 |
-| app — photo editor | 3980–4512 |
-| app — persistence: files | 4513–4663 |
-| app — persistence: autosave (IndexedDB) | 4664–4752 |
-| app — export: CSV | 4753–4760 |
-| app — export: PDF (print) | 4761–4961 |
-| app — export: Word (docx) | 4962–4996 |
-| app — config panel | 4997–5186 |
-| app — office defaults (developer stub) | 5187–5201 |
-| app — password gate | 5202–5227 |
-| app — keyboard, window events and init | 5228–5330 |
+| core — photo display | 326–546 |
+| core — undo history | 547–606 |
+| core — file formats | 607–734 |
+| core — docx export | 735–1201 |
+| core — messages and debug log | 1202–1357 |
+| css — tokens and base | 1358–1409 |
+| css — toolbar and page | 1410–1445 |
+| css — header form | 1446–1481 |
+| css — general observations | 1482–1493 |
+| css — observation table | 1494–1559 |
+| css — photos | 1560–1640 |
+| css — reminders | 1641–1648 |
+| css — popovers, dialogs, panel | 1649–1726 |
+| css — photo editor | 1727–1759 |
+| css — password gate | 1760–1772 |
+| css — responsive | 1773–1810 |
+| css — print | 1811–1872 |
+| markup — shell | 1873–1922 |
+| app — dom helpers and icons | 1923–2076 |
+| app — state and events | 2077–2171 |
+| app — dialogs and popovers | 2172–2250 |
+| app — floating toolbar | 2251–2298 |
+| app — notify: messages and debug log | 2299–2371 |
+| app — render: toolbar and header | 2372–2623 |
+| app — render: general observations | 2624–2679 |
+| app — render: observations table | 2680–2887 |
+| app — render: filters and reminders | 2888–2979 |
+| app — sorting and column resize | 2980–3069 |
+| app — photos: import, cells, drag and drop | 3070–3295 |
+| app — photos: pointer drag | 3296–3462 |
+| app — photos: selection, resize and cell menu | 3463–3668 |
+| app — photos: in-cell crop and rotate | 3669–3795 |
+| app — photos: flatten and markup drawing | 3796–4008 |
+| app — photo editor | 4009–4589 |
+| app — persistence: files | 4590–4740 |
+| app — persistence: autosave (IndexedDB) | 4741–4829 |
+| app — export: CSV | 4830–4837 |
+| app — export: PDF (print) | 4838–5038 |
+| app — export: Word (docx) | 5039–5073 |
+| app — config panel | 5074–5263 |
+| app — office defaults (developer stub) | 5264–5278 |
+| app — password gate | 5279–5304 |
+| app — keyboard, window events and init | 5305–5407 |
 
 ## 2. Modules
 
@@ -157,6 +157,9 @@ Reset button. Photos are always left-aligned (there is no alignment setting).
 | `rotateCrop90(crop, height) → crop\|null` | Crop `{x, y, w, h}` turned 90° clockwise with a photo of the given (pre-rotation) height. |
 | `resizeCrop(start, edge, dx, dy, W, H, min) → crop` | Drag a crop: `edge` is `move` or a mix of `n`/`s`/`e`/`w`; stays inside W × H, each side ≥ `min`. |
 | `normalizeCrop(crop, W, H) → crop\|null` | Whole px inside the photo; null when it covers the whole photo. |
+| `textHandles(box, pad) → [{handle, x, y}]` | Resize handles (`nw`, `ne`, `sw`, `se`) of a selected text shape: corners of its box grown by `pad`. |
+| `hitTextHandle(box, pad, x, y, tol) → handle\|null` | The text resize handle within `tol` of a point. |
+| `resizeText(shape, box, handle, start, p, minSize) → {x, y, size}` | Drag a text handle from `start` to `p`: scales the font size (≥ `minSize`), the opposite corner of `box` stays put. |
 
 ### core — undo history
 
@@ -470,11 +473,12 @@ pointerdown outside the photo applies; ✕, Escape, undo or redo discards.
 | `deleteSelectedShape()` | Remove the selected shape. |
 | `rotateEditorPhoto()` | `rotatePhotoData()` on the working copy (an editor undo step). |
 | `requestEditorRender()` | Schedule a frame. |
-| `renderEditor()` | Draw image, shapes, crop shade, selection. |
+| `renderEditor()` | Draw image, shapes, crop shade, selection (with resize handles on text). |
+| `textHandleAt(p) → {handle, box}\|null` | Resize handle of the selected text shape at a point. |
 | `editorPoint(e) → {x, y}` | Pointer position in image coordinates. |
 | `hitTestEditor(p) → shape\|null` | Topmost shape at a point. |
 | `newShape(tool, p) → shape` | New shape at a point. |
-| `editorPointerDown(e)` | Start draw, move, crop, pan or pinch. |
+| `editorPointerDown(e)` | Start draw, move, text resize, crop, pan or pinch; a second tap on text edits it. |
 | `editorPointerMove(e)` | Update the current gesture. |
 | `editorPointerUp(e)` | Commit the current gesture. |
 | `editorDoubleClick(e)` | Edit text / dimension label. |
@@ -715,7 +719,7 @@ the same space. Rotate re-encodes `original` and transforms crop and shapes.
 
 | Tool | Shape |
 | --- | --- |
-| Select / move | — |
+| Select / move | — (text: corner handles scale `size`; double-click or double-tap edits `text`) |
 | Circle / ellipse | `{ id, type: 'ellipse', cx, cy, rx, ry, color, width }` |
 | Arrow | `{ id, type: 'arrow', x1, y1, x2, y2, color, width }` |
 | Freehand pen | `{ id, type: 'pen', points: [[x, y], …], color, width }` |

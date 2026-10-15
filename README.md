@@ -94,7 +94,10 @@ them as PDFs that match the Word template.
    - zoom with the mouse wheel, pinch, or the +/− buttons; hold Space and
      drag (or drag with two fingers) to move around;
    - rotate turns a sideways photo; *Reset crop* undoes cropping;
-   - select a drawing and press Delete to remove it.
+   - select a drawing and press Delete to remove it;
+   - double-click (or double-tap) a text label to change its wording, and
+     drag the corner squares of a selected label to make it bigger or
+     smaller.
 11. Click **Save** to keep your changes, or **Cancel**. Drawings stay
     editable later, and Ctrl+Z undoes a saved edit.
 
