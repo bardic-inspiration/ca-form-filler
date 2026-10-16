@@ -103,6 +103,14 @@ test('toDocx has the parts Word needs', () => {
   }
 });
 
+test('core properties carry the title, author and app version', () => {
+  const { r, photo } = sampleReport();
+  const files = build(r, [photo.id]);
+  const core = text(files['docProps/core.xml']);
+  assert.match(core, /<dc:creator>A\. Author<\/dc:creator>/);
+  assert.match(core, new RegExp(`<cp:version>${Core.APP_VERSION}</cp:version>`));
+});
+
 test('document text matches the PDF content, escaped', () => {
   const { r, o } = sampleReport();
   const doc = text(build(r, r.observations[0].photoIds)['word/document.xml']);

@@ -1,5 +1,7 @@
 # Field Observation Report Tool
 
+**Version 1.0**
+
 Fill out, save and reopen Walker Macy Field Observation Reports, and export
 them as PDFs that match the Word template.
 
@@ -104,7 +106,7 @@ them as PDFs that match the Word template.
   After that, Save updates the same file.
 - **Save As** saves a copy under a new name.
 - File names look like `260626_P3935_FOR-01.json` (date, project number,
-  report number).
+  report number). Each saved file records the tool version that wrote it.
 - **Open** opens a saved report. You can also drop a report file onto the
   window.
 - The tool keeps a backup of your work every 30 seconds. If the browser
