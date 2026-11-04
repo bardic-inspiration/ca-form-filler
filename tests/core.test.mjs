@@ -51,6 +51,7 @@ test('createReport fills defaults with today for both dates', () => {
   const r = Core.createReport({ today: TODAY });
   assert.equal(r.app, 'WM-FieldReport');
   assert.equal(r.schemaVersion, 1);
+  assert.equal(r.appVersion, Core.APP_VERSION);
   assert.equal(r.header.reportDate, TODAY);
   assert.equal(r.header.visitDate, TODAY);
   assert.equal(r.header.reportTitle, 'Field Observation Report');
@@ -201,6 +202,14 @@ test('parseReport validates app and schema version', () => {
   assert.equal(r.config.photoExportMaxSide, 600);
 });
 
+test('serializeReport stamps the current app version in the saved JSON', () => {
+  const r = sampleReport();
+  const saved = JSON.parse(Core.serializeReport(r));
+  assert.equal(saved.appVersion, Core.APP_VERSION);
+  const reopened = Core.parseReport(Core.serializeReport(r));
+  assert.equal(reopened.appVersion, Core.APP_VERSION);
+});
+
 test('save round trip keeps crops and markup, and purges unreferenced photos', () => {
   const r = sampleReport();
   const kept = Core.createPhoto('data:image/jpeg;base64,AAA', 'a.jpg');
@@ -320,7 +329,7 @@ test('debug report lists versions, capabilities and the log, and no report conte
   });
   assert.match(text, /^Field Report debug info\n/);
   assert.match(text, /Generated: 2026-06-26T15:00:00\.000Z/);
-  assert.match(text, /App: WM-FieldReport, schema 1/);
+  assert.match(text, /App: WM-FieldReport 1\.0, schema 1/);
   assert.match(text, /User agent: UA\/1\.0/);
   assert.match(text, /indexedDB: true/);
   assert.match(text, /originScheme: file:/);

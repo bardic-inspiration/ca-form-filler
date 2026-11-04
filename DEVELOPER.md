@@ -9,55 +9,55 @@ ranges, functions, events) or when errors bypass `notify` (§12);
 
 | Section | Lines |
 | --- | --- |
-| core — config defaults | 14–85 |
-| core — utilities | 86–152 |
-| core — report model | 153–223 |
-| core — numbering | 224–246 |
-| core — inheritance | 247–296 |
-| core — tags and filters | 297–325 |
-| core — photo display | 326–517 |
-| core — undo history | 518–577 |
-| core — file formats | 578–705 |
-| core — docx export | 706–1172 |
-| core — messages and debug log | 1173–1328 |
-| css — tokens and base | 1329–1380 |
-| css — toolbar and page | 1381–1416 |
-| css — header form | 1417–1452 |
-| css — general observations | 1453–1464 |
-| css — observation table | 1465–1530 |
-| css — photos | 1531–1611 |
-| css — reminders | 1612–1619 |
-| css — popovers, dialogs, panel | 1620–1697 |
-| css — photo editor | 1698–1730 |
-| css — password gate | 1731–1743 |
-| css — responsive | 1744–1781 |
-| css — print | 1782–1843 |
-| markup — shell | 1844–1893 |
-| app — dom helpers and icons | 1894–2047 |
-| app — state and events | 2048–2142 |
-| app — dialogs and popovers | 2143–2221 |
-| app — floating toolbar | 2222–2269 |
-| app — notify: messages and debug log | 2270–2342 |
-| app — render: toolbar and header | 2343–2594 |
-| app — render: general observations | 2595–2650 |
-| app — render: observations table | 2651–2858 |
-| app — render: filters and reminders | 2859–2950 |
-| app — sorting and column resize | 2951–3040 |
-| app — photos: import, cells, drag and drop | 3041–3266 |
-| app — photos: pointer drag | 3267–3433 |
-| app — photos: selection, resize and cell menu | 3434–3639 |
-| app — photos: in-cell crop and rotate | 3640–3766 |
-| app — photos: flatten and markup drawing | 3767–3979 |
-| app — photo editor | 3980–4512 |
-| app — persistence: files | 4513–4663 |
-| app — persistence: autosave (IndexedDB) | 4664–4752 |
-| app — export: CSV | 4753–4760 |
-| app — export: PDF (print) | 4761–4961 |
-| app — export: Word (docx) | 4962–4996 |
-| app — config panel | 4997–5186 |
-| app — office defaults (developer stub) | 5187–5201 |
-| app — password gate | 5202–5227 |
-| app — keyboard, window events and init | 5228–5330 |
+| core — config defaults | 14–89 |
+| core — utilities | 90–156 |
+| core — report model | 157–228 |
+| core — numbering | 229–251 |
+| core — inheritance | 252–301 |
+| core — tags and filters | 302–330 |
+| core — photo display | 331–522 |
+| core — undo history | 523–582 |
+| core — file formats | 583–710 |
+| core — docx export | 711–1178 |
+| core — messages and debug log | 1179–1334 |
+| css — tokens and base | 1335–1386 |
+| css — toolbar and page | 1387–1422 |
+| css — header form | 1423–1458 |
+| css — general observations | 1459–1470 |
+| css — observation table | 1471–1536 |
+| css — photos | 1537–1617 |
+| css — reminders | 1618–1625 |
+| css — popovers, dialogs, panel | 1626–1703 |
+| css — photo editor | 1704–1736 |
+| css — password gate | 1737–1749 |
+| css — responsive | 1750–1787 |
+| css — print | 1788–1849 |
+| markup — shell | 1850–1899 |
+| app — dom helpers and icons | 1900–2053 |
+| app — state and events | 2054–2148 |
+| app — dialogs and popovers | 2149–2227 |
+| app — floating toolbar | 2228–2275 |
+| app — notify: messages and debug log | 2276–2348 |
+| app — render: toolbar and header | 2349–2600 |
+| app — render: general observations | 2601–2656 |
+| app — render: observations table | 2657–2864 |
+| app — render: filters and reminders | 2865–2956 |
+| app — sorting and column resize | 2957–3046 |
+| app — photos: import, cells, drag and drop | 3047–3272 |
+| app — photos: pointer drag | 3273–3439 |
+| app — photos: selection, resize and cell menu | 3440–3645 |
+| app — photos: in-cell crop and rotate | 3646–3772 |
+| app — photos: flatten and markup drawing | 3773–3985 |
+| app — photo editor | 3986–4518 |
+| app — persistence: files | 4519–4669 |
+| app — persistence: autosave (IndexedDB) | 4670–4758 |
+| app — export: CSV | 4759–4766 |
+| app — export: PDF (print) | 4767–4967 |
+| app — export: Word (docx) | 4968–5002 |
+| app — config panel | 5003–5192 |
+| app — office defaults (developer stub) | 5193–5207 |
+| app — password gate | 5208–5233 |
+| app — keyboard, window events and init | 5234–5336 |
 
 ## 2. Modules
 
@@ -587,6 +587,7 @@ A product seal, not security: `<body class="locked">` hides everything but
 | --- | --- | --- |
 | `schemaVersion` | number | `1` |
 | `app` | string | `"WM-FieldReport"` |
+| `appVersion` | string | `APP_VERSION` (`"1.0"`) — the tool version that last saved the file, not the data schema |
 | `header.reportNumber` | number | `1` |
 | `header.reportTitle` | string | `"Field Observation Report"` |
 | `header.author`, `purpose`, `project`, `projectNumber`, `time`, `weather` | string | `""` |
@@ -731,9 +732,9 @@ Colors: `MARKUP_COLORS`. Widths: `STROKE_FACTORS` × longest image side.
 | Format | Structure |
 | --- | --- |
 | Report JSON | §3; file name `YYMMDD_{ProjectNo}_FOR-{NN}.json` |
-| Word (.docx) | Stored zip (`zipStore()`) of WordprocessingML parts: `word/document.xml`, `styles.xml`, `settings.xml`, `numbering.xml`, `fontTable.xml`, `header1.xml` (first page), `header2.xml`, `footer1.xml` (first page), `media/`; `docProps/core.xml` (title, author) |
+| Word (.docx) | Stored zip (`zipStore()`) of WordprocessingML parts: `word/document.xml`, `styles.xml`, `settings.xml`, `numbering.xml`, `fontTable.xml`, `header1.xml` (first page), `header2.xml`, `footer1.xml` (first page), `media/`; `docProps/core.xml` (title, author, `cp:version` = `APP_VERSION`) |
 | CSV | UTF-8 BOM, CRLF, RFC 4180; columns `CSV_COLUMNS`; current items then inherited |
-| Office defaults JSON (stub) | `{ app: "WM-FieldReport-Defaults", schemaVersion, config, tags }` |
+| Office defaults JSON (stub) | `{ app: "WM-FieldReport-Defaults", schemaVersion, appVersion, config, tags }` |
 
 ## 11. Extension points
 
